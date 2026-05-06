@@ -1,0 +1,262 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useAction } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
+import { Calendar, ChevronDown, ExternalLink, RefreshCw, Trash2, UserCheck } from "lucide-react";
+
+const GOOGLE_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/userinfo.email",
+].join(" ");
+
+function getOAuthUrl(redirectUri: string): string {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  if (!clientId) return "";
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: GOOGLE_SCOPES,
+    access_type: "offline",
+    prompt: "consent",
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+export default function GoogleCalendarSettings() {
+  const googleAccounts = useQuery(api.google.getGoogleAccounts);
+  const calendars = useQuery(api.calendars.listByFamily);
+  const familyMembers = useQuery(api.families.getMembers, 
+    calendars?.[0]?.familyId ? { familyId: calendars[0].familyId } : "skip"
+  );
+  const user = useQuery(api.users.getCurrentUser);
+
+  const updateAssignee = useMutation(api.calendars.updateAssignee);
+  const deleteCalendar = useMutation(api.calendars.deleteCalendar);
+  const exchangeCode = useAction(api.googleActions.exchangeCode);
+
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState<string | null>(null);
+
+  // The redirect URI must match what's registered in Google Cloud Console
+  const redirectUri = `${window.location.origin}/google-oauth-callback`;
+
+  // Handle OAuth callback code in URL
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+
+    if (code && state === "google-calendar") {
+      // Clear the code from URL immediately
+      window.history.replaceState({}, "", window.location.pathname);
+      setIsConnecting(true);
+      setError(null);
+      exchangeCode({ code, redirectUri })
+        .then(() => setIsConnecting(false))
+        .catch((err) => {
+          setError(err.message ?? "Failed to connect Google account");
+          setIsConnecting(false);
+        });
+    }
+  }, []);
+
+  const handleConnectGoogle = () => {
+    const url = getOAuthUrl(redirectUri);
+    if (!url) {
+      setError("VITE_GOOGLE_CLIENT_ID is not set. Please add it to your .env.local file.");
+      return;
+    }
+    // Append state param to detect callback
+    window.location.href = url + "&state=google-calendar";
+  };
+
+  const handleDeleteCalendar = async (calendarId: Id<"calendars">) => {
+    if (!confirm("Remove this calendar sync? This won't delete any Google Calendar data.")) return;
+    try {
+      await deleteCalendar({ calendarId });
+    } catch (err: any) {
+      setError(err.message ?? "Failed to remove calendar");
+    }
+  };
+
+  const handleAssigneeChange = async (calendarId: Id<"calendars">, assigneeId: Id<"users">) => {
+    try {
+      await updateAssignee({ calendarId, assigneeId });
+      setAssigneeDropdownOpen(null);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to update assignee");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header + Connect Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xl font-semibold">Google Calendar Sync</h3>
+          <p className="text-sm text-[var(--color-muted)] mt-1">
+            Connect Google accounts to overlay events alongside your tasks.
+          </p>
+        </div>
+        <button
+          onClick={handleConnectGoogle}
+          disabled={isConnecting}
+          className="flex items-center gap-2 bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#005bb5] transition-colors disabled:opacity-60"
+        >
+          {isConnecting ? (
+            <RefreshCw size={16} className="animate-spin" />
+          ) : (
+            <Calendar size={16} />
+          )}
+          {isConnecting ? "Connecting…" : "Connect Google Account"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          {error}
+          <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+        </div>
+      )}
+
+      {/* Connected Accounts */}
+      {(googleAccounts ?? []).length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-2">
+            Connected Accounts
+          </p>
+          {googleAccounts!.map((account: NonNullable<typeof googleAccounts>[0]) => (
+            <div
+              key={account._id}
+              className="flex items-center gap-3 p-3 bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] rounded-lg"
+            >
+              {/* Google logo */}
+              <div className="w-8 h-8 rounded-full bg-white border border-[var(--color-hairline)] flex items-center justify-center shrink-0">
+                <svg viewBox="0 0 24 24" className="w-4 h-4">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{account.email}</p>
+                <p className="text-xs text-[var(--color-muted)]">
+                  {(calendars ?? []).filter((c: NonNullable<typeof calendars>[0]) => c?.ownerName === account.email).length} calendars synced
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Synced Calendars */}
+      {(calendars ?? []).length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)] mb-2">
+            Synced Calendars
+          </p>
+          <div className="divide-y divide-[var(--color-hairline)] border border-[var(--color-hairline)] rounded-xl overflow-hidden">
+            {calendars!.map((cal: NonNullable<typeof calendars>[0]) => {
+              const isOwner = cal?.ownerId === user?._id;
+              return (
+                <div
+                  key={cal?._id}
+                  className="flex items-center gap-3 p-3 bg-white hover:bg-[var(--color-surface-soft)] transition-colors"
+                >
+                  <Calendar size={16} className="text-[var(--color-primary)] shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{cal?.name}</p>
+                    <p className="text-xs text-[var(--color-muted)]">Added by {cal?.ownerName}</p>
+                  </div>
+
+                  {/* Assignee selector */}
+                  <div className="relative">
+                    <button
+                      onClick={() =>
+                        isOwner
+                          ? setAssigneeDropdownOpen(
+                              assigneeDropdownOpen === cal?._id ? null : cal?._id ?? null
+                            )
+                          : undefined
+                      }
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                        isOwner
+                          ? "border-[var(--color-hairline)] hover:bg-black/5 cursor-pointer"
+                          : "border-transparent bg-[var(--color-surface-soft)] cursor-default"
+                      }`}
+                      title={isOwner ? "Change assignee" : "Only the owner can change the assignee"}
+                    >
+                      <UserCheck size={12} />
+                      {cal?.assigneeName}
+                      {isOwner && <ChevronDown size={12} />}
+                    </button>
+
+                    {assigneeDropdownOpen === cal?._id && (
+                      <div className="absolute right-0 top-full mt-1 bg-white border border-[var(--color-hairline)] rounded-lg shadow-lg z-50 min-w-[160px] py-1">
+                        {(familyMembers ?? []).map((member: NonNullable<typeof familyMembers>[0]) => (
+                          <button
+                            key={member._id}
+                            onClick={() => handleAssigneeChange(cal!._id, member._id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-[var(--color-surface-soft)] transition-colors"
+                          >
+                            <div
+                              className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                              style={{ backgroundColor: member.colorCode ?? "var(--color-primary)" }}
+                            >
+                              {member.name.charAt(0).toUpperCase()}
+                            </div>
+                            {member.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Delete — only for owner */}
+                  {isOwner && (
+                    <button
+                      onClick={() => handleDeleteCalendar(cal!._id)}
+                      className="p-1.5 text-[var(--color-muted)] hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                      title="Remove calendar sync"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-12 border-2 border-dashed border-[var(--color-hairline)] rounded-xl text-[var(--color-muted)]">
+          <Calendar size={32} className="mx-auto mb-3 opacity-40" />
+          <p className="font-medium">No calendars connected yet</p>
+          <p className="text-sm mt-1">Connect a Google account above to get started.</p>
+        </div>
+      )}
+
+      {/* Setup instructions */}
+      <details className="text-sm text-[var(--color-muted)]">
+        <summary className="cursor-pointer font-medium hover:text-[var(--color-ink)] transition-colors">
+          Setup instructions
+        </summary>
+        <div className="mt-3 p-4 bg-[var(--color-surface-soft)] rounded-lg space-y-2 text-xs leading-relaxed">
+          <p>1. Add <code className="bg-black/5 px-1 rounded">VITE_GOOGLE_CLIENT_ID</code> and <code className="bg-black/5 px-1 rounded">GOOGLE_CLIENT_ID</code> + <code className="bg-black/5 px-1 rounded">GOOGLE_CLIENT_SECRET</code> to your <code className="bg-black/5 px-1 rounded">.env.local</code> and Convex environment variables.</p>
+          <p>2. In Google Cloud Console, add <code className="bg-black/5 px-1 rounded">{window.location.origin}/google-oauth-callback</code> as an Authorized Redirect URI.</p>
+          <p>3. Enable the <strong>Google Calendar API</strong> in your Google Cloud project.</p>
+          <a
+            href="https://console.cloud.google.com/apis/credentials"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[var(--color-primary)] hover:underline"
+          >
+            Open Google Cloud Console <ExternalLink size={10} />
+          </a>
+        </div>
+      </details>
+    </div>
+  );
+}
