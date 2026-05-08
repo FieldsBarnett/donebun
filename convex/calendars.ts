@@ -57,16 +57,7 @@ export const listByFamily = query({
       .withIndex("by_family", (q) => q.eq("familyId", user.familyId!))
       .collect();
 
-    // Enrich with owner and assignee user info
-    const enriched = await Promise.all(
-      calendars.map(async (cal) => {
-        const owner = await ctx.db.get(cal.ownerId);
-        const assignee = await ctx.db.get(cal.assigneeId);
-        return { ...cal, ownerName: owner?.name ?? "Unknown", assigneeName: assignee?.name ?? "Unknown" };
-      })
-    );
-
-    return enriched;
+    return calendars;
   },
 });
 
@@ -96,6 +87,34 @@ export const updateAssignee = mutation({
     }
 
     await ctx.db.patch(args.calendarId, { assigneeId: args.assigneeId });
+  },
+});
+
+// Update the color of a calendar — only the owner can do this
+export const updateColor = mutation({
+  args: {
+    calendarId: v.id("calendars"),
+    color: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.subject)
+      )
+      .unique();
+
+    const calendar = await ctx.db.get(args.calendarId);
+    if (!calendar) throw new Error("Calendar not found");
+
+    if (calendar.ownerId !== user?._id) {
+      throw new Error("Only the owner can update the color of this calendar");
+    }
+
+    await ctx.db.patch(args.calendarId, { color: args.color });
   },
 });
 
@@ -219,13 +238,11 @@ export const getEventsByFamily = query({
         .withIndex("by_calendar", (q) => q.eq("calendarId", cal._id))
         .collect();
       
-      const assignee = await ctx.db.get(cal.assigneeId);
-      
       for (const event of events) {
         allEvents.push({
           ...event,
-          assigneeName: assignee?.name ?? "Unknown",
-          assigneeColor: assignee?.colorCode ?? "blue",
+          assigneeId: cal.assigneeId,
+          color: cal.color,
         });
       }
     }

@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from "react-router-dom";
-import { Calendar, Inbox, CalendarDays, Settings as SettingsIcon, LayoutDashboard, BookOpen } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useConvexAuth, useMutation } from "convex/react";
 import { authClient } from "./lib/auth-client";
 import Dashboard from "./components/Dashboard";
@@ -9,9 +8,12 @@ import CalendarView from "./components/CalendarView";
 import Unscheduled from "./components/Unscheduled";
 import Logbook from "./components/Logbook";
 import Settings from "./components/Settings";
+import QuickEntry from "./components/QuickEntry";
+import VoiceEntry from "./components/VoiceEntry";
+import InviteLanding from "./components/InviteLanding";
 import { api } from "../convex/_generated/api";
-
-import { Users, User } from "lucide-react";
+import { Users, User, LayoutDashboard, CalendarDays, Calendar, Inbox, Settings as SettingsIcon, BookOpen, Plus, Mic as MicIcon, X } from "lucide-react";
+import { FilterMode } from "./lib/filterUtils";
 
 /**
  * Thin redirect page for the Google OAuth callback.
@@ -28,12 +30,41 @@ function GoogleOAuthCallback() {
   return <div className="h-screen flex items-center justify-center">Connecting to Google…</div>;
 }
 
-function Layout({ children }: { children: React.ReactNode }) {
-  const [filterMode, setFilterMode] = useState<"personal" | "everyone">("personal");
+function Layout({ 
+  children, 
+  filterMode, 
+  onToggleFilter 
+}: { 
+  children: React.ReactNode; 
+  filterMode: FilterMode; 
+  onToggleFilter: () => void;
+}) {
+  const [isQuickEntryOpen, setIsQuickEntryOpen] = useState(false);
+  const voiceEntryRef = useRef<{ startRecording: () => void; stopRecording: () => void; cancelRecording: () => void; isRecording: boolean } | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceRecording, setVoiceRecording] = useState(false);
 
-  const toggleFilter = () => {
-    setFilterMode(prev => prev === "personal" ? "everyone" : "personal");
+  const toggleQuickEntry = () => {
+    setIsQuickEntryOpen(prev => !prev);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input or textarea
+      if (
+        e.key === "n" && 
+        !isQuickEntryOpen &&
+        document.activeElement?.tagName !== "INPUT" && 
+        document.activeElement?.tagName !== "TEXTAREA"
+      ) {
+        e.preventDefault();
+        setIsQuickEntryOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isQuickEntryOpen]);
 
   return (
     <div className="flex h-[100dvh] bg-[var(--color-canvas)] text-[var(--color-ink)] flex-col md:flex-row font-system overflow-hidden">
@@ -66,13 +97,17 @@ function Layout({ children }: { children: React.ReactNode }) {
         <div className="mt-auto pt-4 border-t border-[var(--color-hairline)] space-y-2">
           {/* Desktop Filter Toggle */}
           <button 
-            onClick={toggleFilter}
+            onClick={onToggleFilter}
             className="flex items-center gap-2.5 px-3 py-1.5 w-full rounded-md transition-colors hover:bg-black/5 text-[var(--color-ink)]"
           >
-            {filterMode === "personal" ? (
+            {filterMode === "personal" && (
               <><User size={18} className="text-[var(--color-badge-blue)]" /> Personal</>
-            ) : (
-              <><Users size={18} className="text-[var(--color-badge-purple)]" /> Everyone</>
+            )}
+            {filterMode === "family" && (
+              <><Users size={18} className="text-[var(--color-badge-purple)]" /> Family</>
+            )}
+            {filterMode === "everyone" && (
+              <><Users size={18} className="text-[var(--color-badge-pink)]" /> Everyone</>
             )}
           </button>
 
@@ -94,13 +129,17 @@ function Layout({ children }: { children: React.ReactNode }) {
         {/* Mobile Filter Toggle (Top of bottom nav) */}
         <div className="flex justify-center -mt-4 mb-1">
           <button 
-            onClick={toggleFilter}
+            onClick={onToggleFilter}
             className="flex items-center gap-2 px-4 py-1.5 bg-white border border-[var(--color-hairline)] shadow-sm rounded-full transition-colors font-medium text-sm text-[var(--color-ink)]"
           >
-            {filterMode === "personal" ? (
+            {filterMode === "personal" && (
               <><User size={16} className="text-[var(--color-badge-blue)]" /> Personal</>
-            ) : (
-              <><Users size={16} className="text-[var(--color-badge-purple)]" /> Everyone</>
+            )}
+            {filterMode === "family" && (
+              <><Users size={16} className="text-[var(--color-badge-purple)]" /> Family</>
+            )}
+            {filterMode === "everyone" && (
+              <><Users size={16} className="text-[var(--color-badge-pink)]" /> Everyone</>
             )}
           </button>
         </div>
@@ -124,32 +163,109 @@ function Layout({ children }: { children: React.ReactNode }) {
           </NavLink>
         </div>
       </div>
+
+      {/* FAB + Voice Button cluster */}
+      <div className="fixed bottom-20 md:bottom-8 right-6 flex flex-col items-center gap-3 z-[60]">
+        {/* Cancel button (only when recording) */}
+        {voiceRecording && (
+          <button
+            onClick={() => voiceEntryRef.current?.cancelRecording()}
+            className="w-10 h-10 rounded-full bg-white border border-[var(--color-hairline)] shadow-lg flex items-center justify-center text-red-500 hover:bg-red-50 transition-all animate-modal-in"
+            aria-label="Cancel recording"
+          >
+            <X size={20} />
+          </button>
+        )}
+        {/* Voice mic button */}
+        <button
+          onPointerDown={(e) => {
+            e.preventDefault();
+            setVoiceOpen(true);
+            // Small delay to let VoiceEntry mount before we signal it
+            setTimeout(() => voiceEntryRef.current?.startRecording(), 50);
+          }}
+          onPointerUp={() => {
+            if (voiceEntryRef.current?.isRecording) {
+              voiceEntryRef.current.stopRecording();
+            }
+          }}
+          onPointerLeave={() => {
+            if (voiceEntryRef.current?.isRecording) {
+              voiceEntryRef.current.stopRecording();
+            }
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+          className={`relative w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 select-none touch-none ${
+            voiceRecording
+              ? 'bg-red-500 scale-110 shadow-red-500/40 shadow-xl'
+              : 'bg-[var(--color-surface-sidebar)] border border-[var(--color-hairline)] hover:scale-105 active:scale-95'
+          }`}
+          aria-label={voiceRecording ? 'Stop recording' : 'Start voice recording'}
+        >
+          {voiceRecording && <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-50" />}
+          <MicIcon size={22} className={voiceRecording ? 'text-white relative z-10' : 'text-[var(--color-muted)]'} />
+        </button>
+        {/* FAB */}
+        <button
+          onClick={toggleQuickEntry}
+          className="w-14 h-14 bg-[var(--color-primary)] text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all group"
+          aria-label="Create new task"
+        >
+          <Plus size={28} className="group-hover:rotate-90 transition-transform duration-200" />
+        </button>
+      </div>
+
+      {/* Quick Entry Modal */}
+      <QuickEntry
+        isOpen={isQuickEntryOpen}
+        onClose={() => setIsQuickEntryOpen(false)}
+      />
+
+      {/* Voice Entry */}
+      <VoiceEntry
+        isOpen={voiceOpen}
+        onClose={() => { setVoiceOpen(false); setVoiceRecording(false); }}
+        onRecordingChange={setVoiceRecording}
+        ref={voiceEntryRef}
+      />
     </div>
   );
 }
 
 function AppContent() {
   const storeUser = useMutation(api.users.store);
+  const [filterMode, setFilterMode] = useState<FilterMode>("personal");
+
   useEffect(() => {
     storeUser().catch(console.error);
   }, [storeUser]);
 
+  const toggleFilter = () => {
+    setFilterMode(prev => {
+      if (prev === "personal") return "family";
+      if (prev === "family") return "everyone";
+      return "personal";
+    });
+  };
+
   return (
     <BrowserRouter>
-      <Layout>
+      <Layout filterMode={filterMode} onToggleFilter={toggleFilter}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/timeline" element={<Timeline />} />
-          <Route path="/calendar" element={<CalendarView />} />
-          <Route path="/unscheduled" element={<Unscheduled />} />
-          <Route path="/logbook" element={<Logbook />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/" element={<Dashboard filterMode={filterMode} />} />
+          <Route path="/timeline" element={<Timeline filterMode={filterMode} />} />
+          <Route path="/calendar" element={<CalendarView filterMode={filterMode} />} />
+          <Route path="/unscheduled" element={<Unscheduled filterMode={filterMode} />} />
+          <Route path="/logbook" element={<Logbook filterMode={filterMode} />} />
+          <Route path="/settings" element={<Settings filterMode={filterMode} />} />
+          <Route path="/join/:inviteCode" element={<InviteLanding />} />
           <Route path="/google-oauth-callback" element={<GoogleOAuthCallback />} />
         </Routes>
       </Layout>
     </BrowserRouter>
   );
 }
+
 function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

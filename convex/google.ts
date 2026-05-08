@@ -81,3 +81,44 @@ export const getGoogleAccounts = query({
     return accounts.map(({ accessToken: _a, refreshToken: _r, ...safe }) => safe);
   },
 });
+
+export const getFamilyGoogleAccounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    const dbUser = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.subject)
+      )
+      .unique();
+
+    if (!dbUser?.familyId) return [];
+
+    const members = await ctx.db
+      .query("users")
+      .withIndex("by_family", (q) => q.eq("familyId", dbUser.familyId!))
+      .collect();
+
+    const allAccounts = [];
+    for (const member of members) {
+      const accounts = await ctx.db
+        .query("googleAccounts")
+        .withIndex("by_user", (q) => q.eq("userId", member._id))
+        .collect();
+      
+      for (const account of accounts) {
+        const { accessToken: _a, refreshToken: _r, ...safe } = account;
+        allAccounts.push({
+          ...safe,
+          ownerName: member.name,
+          isMe: member._id === dbUser._id,
+        });
+      }
+    }
+
+    return allAccounts;
+  },
+});

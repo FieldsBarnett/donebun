@@ -8,17 +8,18 @@ In the Cloudflare Pages dashboard for your project:
 
 ### Build Settings
 - **Framework Preset**: `Vite`
-- **Build Command**: `npm run build`
+- **Build Command**: `npx convex deploy --cmd 'npm run build'`
 - **Build Output Directory**: `dist`
 - **Node.js Version**: `20` or higher
 
 ### Environment Variables (Production)
-Set these in **Settings > Environment variables**:
+Set these in **Settings > Environment variables** on Cloudflare. **IMPORTANT**: For `CONVEX_DEPLOY_KEY`, ensure you set it for both **Build** and **Preview** environments if needed.
 
 | Variable | Description |
 | :--- | :--- |
-| `VITE_CONVEX_URL` | Your production Convex deployment URL (e.g., `https://happy-animal-123.convex.cloud`) |
-| `VITE_CONVEX_SITE_URL` | Your production Convex Site URL (e.g., `https://happy-animal-123.convex.site`) |
+| `CONVEX_DEPLOY_KEY` | **Required.** Your Convex deploy key (get this from the Convex Dashboard under Settings > Deploy Key). |
+| `VITE_CONVEX_URL` | Your production Convex deployment URL. |
+| `VITE_CONVEX_SITE_URL` | Your production Convex Site URL. |
 
 ---
 

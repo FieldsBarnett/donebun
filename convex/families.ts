@@ -3,8 +3,8 @@ import { v } from "convex/values";
 
 // Create a family and assign the current user as the owner
 export const create = mutation({
-  args: { name: v.string() },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthenticated");
 
@@ -16,8 +16,9 @@ export const create = mutation({
     if (!user) throw new Error("User not found in app database");
 
     const familyId = await ctx.db.insert("families", {
-      name: args.name,
+      name: `${user.name}'s Family`,
       ownerId: user._id,
+      inviteCode: crypto.randomUUID(),
     });
 
     // Update user to belong to this family and give a default color
@@ -26,20 +27,13 @@ export const create = mutation({
       colorCode: "blue", // default color for the owner
     });
 
-    // Create the "Private 🔒" category automatically for this family
-    await ctx.db.insert("categories", {
-      name: "Private 🔒",
-      familyId: familyId,
-    });
-
     return familyId;
   },
 });
 
-// Join an existing family (e.g. by passing the family ID)
-// For MVP, we use the family ID as an invite code.
+// Join an existing family by invite code
 export const join = mutation({
-  args: { familyId: v.id("families") },
+  args: { inviteCode: v.string() },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthenticated");
@@ -50,16 +44,74 @@ export const join = mutation({
       .unique();
       
     if (!user) throw new Error("User not found in app database");
+    if (user.familyId) throw new Error("You must leave your current family before joining a new one.");
 
-    const family = await ctx.db.get(args.familyId);
+    const family = await ctx.db
+      .query("families")
+      .withIndex("by_inviteCode", (q) => q.eq("inviteCode", args.inviteCode))
+      .unique();
+
     if (!family) throw new Error("Family not found");
 
     await ctx.db.patch(user._id, {
-      familyId: args.familyId,
-      colorCode: "purple", // default color for invited member, could be randomized
+      familyId: family._id,
+      colorCode: "purple", // default color for invited member
     });
 
-    return args.familyId;
+    return family._id;
+  },
+});
+
+// Leave the current family
+export const leave = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+      
+    if (!user) throw new Error("User not found in app database");
+    if (!user.familyId) throw new Error("You are not in a family");
+
+    await ctx.db.patch(user._id, {
+      familyId: undefined,
+      colorCode: undefined,
+    });
+
+    return true;
+  },
+});
+
+// Get family info by invite code
+export const getByInviteCode = query({
+  args: { inviteCode: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("families")
+      .withIndex("by_inviteCode", (q) => q.eq("inviteCode", args.inviteCode))
+      .unique();
+  },
+});
+
+// Get the current user's family details
+export const getMyFamily = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+    
+    if (!user || !user.familyId) return null;
+
+    return await ctx.db.get(user.familyId);
   },
 });
 
@@ -71,7 +123,7 @@ export const getMembers = query({
 
     const members = await ctx.db
       .query("users")
-      .filter((q) => q.eq(q.field("familyId"), args.familyId))
+      .withIndex("by_family", (q) => q.eq("familyId", args.familyId))
       .collect();
 
     return members;

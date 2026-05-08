@@ -1,14 +1,17 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { TaskRow } from "./TaskRow";
+import { TaskGroupedList } from "./TaskGroupedList";
 import { Inbox } from "lucide-react";
+import { filterTasks, FilterMode } from "../lib/filterUtils";
 
-export default function Unscheduled() {
-  const tasks = useQuery(api.tasks.getTasks) || [];
+export default function Unscheduled({ filterMode }: { filterMode: FilterMode }) {
+  const currentUser = useQuery(api.users.getCurrentUser);
+  const tasks = (useQuery(api.tasks.getTasks) || []) as any[];
   const updateTaskStatus = useMutation(api.tasks.updateTaskStatus);
-  const deleteTask = useMutation(api.tasks.deleteTask);
 
-  const unscheduledTasks = tasks.filter(t => t.status === "active" && !t.dueDate);
+
+  const unscheduledTasks = filterTasks(tasks, currentUser, filterMode)
+    .filter(t => t.status === "active" && !t.dueDate);
 
   return (
     <div className="px-8 py-10 md:px-14 max-w-4xl mx-auto pb-24">
@@ -23,23 +26,10 @@ export default function Unscheduled() {
         Tasks with no specific date or deadline. Sort them into categories when you're ready.
       </p>
 
-      <div className="flex flex-col">
-        {unscheduledTasks.map(task => (
-          <TaskRow 
-            key={task._id} 
-            title={task.title} 
-            completed={false} 
-            assigneeColor={task.assigneeColor}
-            tags={task.categoryName ? [task.categoryName] : []}
-            onToggle={() => updateTaskStatus({ id: task._id, status: "completed" })} 
-            onOptions={() => deleteTask({ id: task._id })} 
-          />
-        ))}
-        {unscheduledTasks.length === 0 && (
-          <p className="text-sm text-[var(--color-muted)] py-4 italic">No unscheduled tasks.</p>
-        )}
-      </div>
-
+      <TaskGroupedList 
+        tasks={unscheduledTasks} 
+        onToggle={(task) => updateTaskStatus({ id: task._id, status: "completed" })}
+      />
     </div>
   );
 }

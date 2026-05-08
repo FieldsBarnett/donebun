@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Search, X, CheckCircle2, Circle } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { parseDueDate } from "../lib/dateUtils";
 
 /** Very simple fuzzy match: returns a score > 0 if all chars of query appear in order in target. */
 function fuzzyScore(query: string, target: string): number {
@@ -74,7 +75,7 @@ export default function SearchBar() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={handleFocus}
-          placeholder="Search todos…"
+          placeholder="Search tasks…"
           className="flex-1 bg-transparent outline-none text-[15px] text-[var(--color-ink)] placeholder-[var(--color-muted)] min-w-0"
         />
         {query && (
@@ -98,7 +99,7 @@ export default function SearchBar() {
         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-[var(--color-hairline)] shadow-[0_8px_32px_rgba(0,0,0,0.12)] z-50 overflow-hidden">
           {results.length === 0 ? (
             <div className="px-4 py-6 text-center text-[var(--color-muted)] text-sm">
-              No todos matching "<span className="font-medium text-[var(--color-ink)]">{query}</span>"
+              No tasks matching "<span className="font-medium text-[var(--color-ink)]">{query}</span>"
             </div>
           ) : (
             <ul>
@@ -124,7 +125,7 @@ export default function SearchBar() {
                   </span>
                   {task.dueDate && (
                     <span className="text-[11px] text-[var(--color-muted)] shrink-0">
-                      {new Date(task.dueDate).toLocaleDateString("default", { month: "short", day: "numeric" })}
+                      {parseDueDate(task.dueDate).toLocaleDateString("default", { month: "short", day: "numeric" })}
                     </span>
                   )}
                 </li>

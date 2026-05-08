@@ -4,6 +4,16 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Calendar, ChevronDown, ExternalLink, RefreshCw, Trash2, UserCheck } from "lucide-react";
 
+const PRESET_COLORS = [
+  '#007aff', // Blue
+  '#ff9500', // Orange
+  '#ff2d55', // Pink
+  '#af52de', // Violet
+  '#34c759', // Green
+  '#5ac8fa', // Sky
+  '#ffcc00', // Yellow
+];
+
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
@@ -24,20 +34,20 @@ function getOAuthUrl(redirectUri: string): string {
 }
 
 export default function GoogleCalendarSettings() {
-  const googleAccounts = useQuery(api.google.getGoogleAccounts);
+  const googleAccounts = useQuery(api.google.getFamilyGoogleAccounts);
   const calendars = useQuery(api.calendars.listByFamily);
-  const familyMembers = useQuery(api.families.getMembers, 
-    calendars?.[0]?.familyId ? { familyId: calendars[0].familyId } : "skip"
-  );
+  const familyMembers = useQuery(api.users.getMyFamilyMembers) || [];
   const user = useQuery(api.users.getCurrentUser);
 
   const updateAssignee = useMutation(api.calendars.updateAssignee);
+  const updateColor = useMutation(api.calendars.updateColor);
   const deleteCalendar = useMutation(api.calendars.deleteCalendar);
   const exchangeCode = useAction(api.googleActions.exchangeCode);
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState<string | null>(null);
+  const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
 
   // The redirect URI must match what's registered in Google Cloud Console
   const redirectUri = `${window.location.origin}/google-oauth-callback`;
@@ -87,6 +97,15 @@ export default function GoogleCalendarSettings() {
       setAssigneeDropdownOpen(null);
     } catch (err: any) {
       setError(err.message ?? "Failed to update assignee");
+    }
+  };
+
+  const handleColorChange = async (calendarId: Id<"calendars">, color: string) => {
+    try {
+      await updateColor({ calendarId, color });
+      setColorPickerOpen(null);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to update color");
     }
   };
 
@@ -142,9 +161,14 @@ export default function GoogleCalendarSettings() {
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{account.email}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium truncate">{account.email}</p>
+                  {account.isMe && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold">You</span>
+                  )}
+                </div>
                 <p className="text-xs text-[var(--color-muted)]">
-                  {(calendars ?? []).filter((c: NonNullable<typeof calendars>[0]) => c?.ownerName === account.email).length} calendars synced
+                  {account.ownerName} • {(calendars ?? []).filter((c: any) => c?.googleAccountId === account._id).length} calendars synced
                 </p>
               </div>
             </div>
@@ -164,12 +188,54 @@ export default function GoogleCalendarSettings() {
               return (
                 <div
                   key={cal?._id}
-                  className="flex items-center gap-3 p-3 bg-white hover:bg-[var(--color-surface-soft)] transition-colors"
+                  className={`flex items-center gap-3 p-3 bg-white transition-colors ${isOwner ? 'hover:bg-[var(--color-surface-soft)]' : 'opacity-80'}`}
                 >
-                  <Calendar size={16} className="text-[var(--color-primary)] shrink-0" />
+                  <div className="relative">
+                    <Calendar size={16} className={`${isOwner ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted)]'} shrink-0`} />
+                    {!isOwner && (
+                      <div className="absolute -top-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">
+                        <UserCheck size={8} className="text-[var(--color-muted)]" />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{cal?.name}</p>
-                    <p className="text-xs text-[var(--color-muted)]">Added by {cal?.ownerName}</p>
+                    <p className="text-xs text-[var(--color-muted)] flex items-center gap-1">
+                      {isOwner ? 'Your calendar' : `Added by ${familyMembers.find(m => m._id === cal?.ownerId)?.name || 'Unknown'}`}
+                    </p>
+                  </div>
+
+                  {/* Color picker */}
+                  <div className="relative">
+                    <button
+                      onClick={() =>
+                        isOwner
+                          ? setColorPickerOpen(
+                              colorPickerOpen === cal?._id ? null : cal?._id ?? null
+                            )
+                          : undefined
+                      }
+                      className={`w-6 h-6 rounded-full border shadow-sm transition-transform hover:scale-110 active:scale-95 ${
+                        isOwner ? "cursor-pointer" : "cursor-default"
+                      }`}
+                      style={{ backgroundColor: cal?.color ?? "var(--color-badge-blue)" }}
+                      title={isOwner ? "Change calendar color" : "Calendar color"}
+                    />
+
+                    {colorPickerOpen === cal?._id && (
+                      <div className="absolute right-0 top-full mt-1 bg-white border border-[var(--color-hairline)] rounded-lg shadow-lg z-50 p-2 grid grid-cols-4 gap-1.5">
+                        {PRESET_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => handleColorChange(cal!._id, c)}
+                            className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 ${
+                              cal?.color === c ? "border-black" : "border-transparent"
+                            }`}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Assignee selector */}
@@ -190,7 +256,7 @@ export default function GoogleCalendarSettings() {
                       title={isOwner ? "Change assignee" : "Only the owner can change the assignee"}
                     >
                       <UserCheck size={12} />
-                      {cal?.assigneeName}
+                      {familyMembers.find(m => m._id === cal?.assigneeId)?.name || 'Unknown'}
                       {isOwner && <ChevronDown size={12} />}
                     </button>
 

@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
 
 export const store = mutation({
   args: {},
@@ -51,3 +52,86 @@ export const getCurrentUser = query({
       .unique();
   },
 });
+
+export const getMyFamilyMembers = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.subject)
+      )
+      .unique();
+
+    if (!user?.familyId) return [];
+
+    return await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("familyId"), user.familyId))
+      .collect();
+  },
+});
+
+export const updateProfile = mutation({
+  args: {
+    colorCode: v.optional(v.string()),
+    initials: v.optional(v.string()),
+    name: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.subject)
+      )
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const patch: any = {};
+    if (args.colorCode !== undefined) patch.colorCode = args.colorCode;
+    if (args.name !== undefined) patch.name = args.name;
+    if (args.initials !== undefined) {
+      // Validate initials length
+      patch.initials = args.initials.slice(0, 2).toUpperCase();
+    }
+
+    await ctx.db.patch(user._id, patch);
+  },
+});
+
+export const deleteAccount = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.subject)
+      )
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Optional: Cascade delete tasks, etc. 
+    // For now, just delete the user record.
+    await ctx.db.delete(user._id);
+  },
+});
+

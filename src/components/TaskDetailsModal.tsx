@@ -1,4 +1,5 @@
 import { X, Calendar, Tag, Repeat, ListTodo, AlignLeft } from "lucide-react";
+import Modal from "./Modal";
 
 interface TaskDetailsModalProps {
   isOpen: boolean;
@@ -7,11 +8,9 @@ interface TaskDetailsModalProps {
 }
 
 export default function TaskDetailsModal({ isOpen, onClose, taskTitle }: TaskDetailsModalProps) {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 font-system">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-[var(--color-hairline)] flex flex-col max-h-[90vh]">
+    <Modal isOpen={isOpen} onClose={onClose} zIndex={50}>
+      <div className="bg-white rounded-2xl shadow-xl border border-[var(--color-hairline)] flex flex-col max-h-[90vh] font-system">
         <div className="flex items-center justify-between p-4 border-b border-[var(--color-hairline)]">
           <input 
             type="text" 
@@ -71,6 +70,6 @@ export default function TaskDetailsModal({ isOpen, onClose, taskTitle }: TaskDet
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

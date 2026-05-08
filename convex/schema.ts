@@ -8,46 +8,49 @@ export default defineSchema({
     tokenIdentifier: v.string(),
     familyId: v.optional(v.id("families")),
     colorCode: v.optional(v.string()), // e.g. 'orange', 'pink' corresponding to design tokens
-  }).index("by_tokenIdentifier", ["tokenIdentifier"]),
+    initials: v.optional(v.string()), // max 2 letters
+  }).index("by_tokenIdentifier", ["tokenIdentifier"])
+    .index("by_family", ["familyId"]),
 
   families: defineTable({
     name: v.string(),
     ownerId: v.id("users"),
-  }),
+    inviteCode: v.string(),
+  }).index("by_inviteCode", ["inviteCode"]),
 
   categories: defineTable({
     name: v.string(),
     familyId: v.id("families"),
+    icon: v.optional(v.string()),
   }).index("by_family", ["familyId"]),
 
   tasks: defineTable({
     title: v.string(),
     description: v.optional(v.string()),
-    status: v.union(v.literal("active"), v.literal("completed")),
+    status: v.union(v.literal("active"), v.literal("completed"), v.literal("deleted")),
     categoryId: v.optional(v.id("categories")),
     ownerId: v.id("users"),
     assigneeId: v.optional(v.id("users")), // undefined means "Family Pool"
     dueDate: v.optional(v.string()), // ISO date string
-    repeatOption: v.optional(v.union(v.literal("fixed"), v.literal("completion"))),
-    repeatInterval: v.optional(v.number()), // in days
+    originalDueDate: v.optional(v.string()), // The date this occurrence was originally scheduled for (for exceptions)
+    recurrence: v.optional(v.object({
+      strategy: v.union(v.literal("fixed"), v.literal("completion")),
+      frequency: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly"), v.literal("yearly")),
+      interval: v.number(), // every N days/weeks/etc
+      daysOfWeek: v.optional(v.array(v.number())), // 0-6 for weekly
+      dayOfMonth: v.optional(v.number()), // 1-31 for monthly
+      endDate: v.optional(v.string()), // ISO date string
+      excludedDates: v.optional(v.array(v.string())), // ISO date strings to skip in virtual expansion
+    })),
+    parentTaskId: v.optional(v.id("tasks")),
     familyId: v.id("families"),
     isPrivate: v.boolean(), // Tasks placed in the special "Private 🔒" category
+    statusSet: v.optional(v.number()), // Timestamp of when the status was last set
   })
     .index("by_family", ["familyId"])
     .index("by_assignee", ["assigneeId"])
     .index("by_category", ["categoryId"]),
 
-  tags: defineTable({
-    name: v.string(),
-    familyId: v.id("families"),
-  }).index("by_family", ["familyId"]),
-
-  taskTags: defineTable({
-    taskId: v.id("tasks"),
-    tagId: v.id("tags"),
-  })
-    .index("by_task", ["taskId"])
-    .index("by_tag", ["tagId"]),
 
   googleAccounts: defineTable({
     userId: v.id("users"),
@@ -65,6 +68,7 @@ export default defineSchema({
     assigneeId: v.id("users"), // The family member this calendar "belongs" to
     familyId: v.id("families"),
     syncToken: v.optional(v.string()), // For incremental sync
+    color: v.optional(v.string()), // Custom color for events from this calendar
   })
     .index("by_family", ["familyId"])
     .index("by_assignee", ["assigneeId"])

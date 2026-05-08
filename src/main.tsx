@@ -6,6 +6,9 @@ import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { authClient } from "./lib/auth-client";
 import App from "./App";
 import "./index.css";
+import { registerSW } from "virtual:pwa-register";
+
+registerSW({ immediate: true });
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 const queryClient = new QueryClient();

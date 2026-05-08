@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as calendars from "../calendars.js";
+import type * as categories from "../categories.js";
 import type * as crons from "../crons.js";
 import type * as families from "../families.js";
 import type * as google from "../google.js";
@@ -17,6 +18,7 @@ import type * as googleActions from "../googleActions.js";
 import type * as http from "../http.js";
 import type * as tasks from "../tasks.js";
 import type * as users from "../users.js";
+import type * as voiceActions from "../voiceActions.js";
 
 import type {
   ApiFromModules,
@@ -27,6 +29,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   calendars: typeof calendars;
+  categories: typeof categories;
   crons: typeof crons;
   families: typeof families;
   google: typeof google;
@@ -34,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   tasks: typeof tasks;
   users: typeof users;
+  voiceActions: typeof voiceActions;
 }>;
 
 /**
