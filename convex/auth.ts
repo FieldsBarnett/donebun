@@ -10,13 +10,22 @@ export const authComponent = createClient<DataModel>(components.betterAuth);
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const trustedOrigins = [
+  "https://donebun.app",
+  "https://www.donebun.app",
+];
+
+if (process.env.SITE_URL && !trustedOrigins.includes(process.env.SITE_URL)) {
+  trustedOrigins.push(process.env.SITE_URL);
+}
+
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
   return betterAuth({
     baseURL: process.env.CONVEX_SITE_URL,
-    trustedOrigins: process.env.SITE_URL ? [process.env.SITE_URL] : [],
+    trustedOrigins,
     database: authComponent.adapter(ctx),
     plugins: [
-      crossDomain({ siteUrl: process.env.SITE_URL! }),
+      crossDomain({ siteUrl: process.env.SITE_URL || trustedOrigins[0] }),
       convex({ authConfig })
     ],
     emailAndPassword: {

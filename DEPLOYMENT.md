@@ -29,7 +29,7 @@ In the [Convex Dashboard](https://dashboard.convex.dev), go to **Settings > Envi
 
 | Variable | Description |
 | :--- | :--- |
-| `SITE_URL` | Your Cloudflare Pages URL (e.g., `https://donebun.pages.dev` or `https://donebun.app`) |
+| `SITE_URL` | Your canonical production URL (e.g., `https://donebun.app`). |
 | `CONVEX_SITE_URL` | The Site URL of this Convex deployment. |
 | `BETTER_AUTH_SECRET` | A long, random string for auth security. |
 | `GOOGLE_CLIENT_ID` | Your Google OAuth Client ID. |

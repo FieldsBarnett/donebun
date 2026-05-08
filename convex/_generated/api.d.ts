@@ -16,6 +16,7 @@ import type * as families from "../families.js";
 import type * as google from "../google.js";
 import type * as googleActions from "../googleActions.js";
 import type * as http from "../http.js";
+import type * as recurrence from "../recurrence.js";
 import type * as tasks from "../tasks.js";
 import type * as users from "../users.js";
 import type * as voiceActions from "../voiceActions.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   google: typeof google;
   googleActions: typeof googleActions;
   http: typeof http;
+  recurrence: typeof recurrence;
   tasks: typeof tasks;
   users: typeof users;
   voiceActions: typeof voiceActions;
