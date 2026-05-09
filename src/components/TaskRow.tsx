@@ -822,7 +822,7 @@ export function TaskRow({
               Cancel
             </button>
             <button
-              onClick={handleDelete}
+              onClick={() => handleDelete()}
               className="flex-1 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors"
             >
               Delete
