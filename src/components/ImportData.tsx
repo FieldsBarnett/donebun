@@ -70,7 +70,7 @@ export default function ImportData({ onBack }: ImportDataProps) {
       const formattedTasks: any[] = [];
 
       for (const row of rawTasks) {
-        const [uuid, title, notes, status, startDate, deadline, area, project, recurrenceBlob] = row;
+        const [uuid, title, notes, status, startDate, deadline, area, _project, recurrenceBlob] = row;
         
         // Map status: 0=open, 2=completed, 3=canceled
         let mappedStatus: "active" | "completed" | "deleted" = "active";
