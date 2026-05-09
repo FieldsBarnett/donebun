@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { parseDueDate, isSameDay, toDateKey } from "../lib/dateUtils";
 import CategorySelector from "./CategorySelector";
 import Modal from "./Modal";
-import ImagePreviewModal from "./ImagePreviewModal";
+import FilePreviewModal, { Attachment } from "./FilePreviewModal";
 import DatePicker from "./DatePicker";
 import { RecurrenceRule } from "./RecurrencePickerModal";
 import PickerWrapper from "./PickerWrapper";
@@ -15,12 +15,6 @@ import PickerWrapper from "./PickerWrapper";
 interface QuickEntryProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-interface Attachment {
-  storageId: string;
-  name: string;
-  type: string;
 }
 
 const AttachmentItem = ({ file, onRemove, onOpen }: { file: Attachment; onRemove?: () => void; onOpen?: () => void }) => {
@@ -51,36 +45,29 @@ const AttachmentItem = ({ file, onRemove, onOpen }: { file: Attachment; onRemove
   }
 
   return (
-    <div 
-      className="flex items-center gap-2 px-2 py-1 bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] rounded-lg text-xs group shadow-sm"
+    <button 
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onOpen?.(); }}
+      className="flex items-center gap-2 px-2 py-1 bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] rounded-lg text-xs group shadow-sm hover:border-[var(--color-primary)] transition-all hover:shadow-md active:scale-95"
       style={{ transform: `rotate(${tilt}deg)` }}
     >
-      {url ? (
-        <a 
-          href={url} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="flex items-center gap-2 hover:text-[var(--color-primary)] transition-colors"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <FileText size={12} />
-          <span className="max-w-[120px] truncate">{file.name}</span>
-        </a>
-      ) : (
-        <div className="flex items-center gap-2 text-[var(--color-muted)]">
-          <FileText size={12} />
-          <span className="max-w-[120px] truncate">{file.name}</span>
-        </div>
-      )}
+      <div className="flex items-center gap-2 transition-colors">
+        <FileText size={12} className="text-[var(--color-muted)] group-hover:text-[var(--color-primary)]" />
+        <span className="max-w-[120px] truncate text-[var(--color-muted)] group-hover:text-[var(--color-ink)]">{file.name}</span>
+      </div>
       {onRemove && (
         <button
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="p-0.5 hover:bg-black/5 rounded text-[var(--color-muted)] hover:text-red-500 ml-1"
+          type="button"
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            onRemove(); 
+          }}
+          className="p-0.5 hover:bg-black/5 rounded text-[var(--color-muted)] hover:text-red-500 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <Trash2 size={12} />
         </button>
       )}
-    </div>
+    </button>
   );
 };
 
@@ -386,7 +373,7 @@ export default function QuickEntry({ isOpen, onClose }: QuickEntryProps) {
             </div>
           )}
 
-          <ImagePreviewModal 
+          <FilePreviewModal
             file={previewImage?.file || null}
             isOpen={!!previewImage}
             onClose={() => setPreviewImage(null)}
@@ -397,7 +384,6 @@ export default function QuickEntry({ isOpen, onClose }: QuickEntryProps) {
               }
             }}
           />
-
           <div className="flex flex-wrap items-center justify-end gap-2 mb-6">
             <div className="relative">
               <input

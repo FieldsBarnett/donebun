@@ -7,18 +7,12 @@ import { parseDueDate, isSameDay, toDateKey } from "../lib/dateUtils";
 import { motion, AnimatePresence } from "framer-motion";
 import CategorySelector from "./CategorySelector";
 import Modal from "./Modal";
-import ImagePreviewModal from "./ImagePreviewModal";
+import FilePreviewModal, { Attachment } from "./FilePreviewModal";
 import DatePicker from "./DatePicker";
 import { RecurrenceRule } from "./RecurrencePickerModal";
 import PickerWrapper from "./PickerWrapper";
 
 import RecurrenceEditModal, { UpdateMode } from "./RecurrenceEditModal";
-
-interface Attachment {
-  storageId: string;
-  name: string;
-  type: string;
-}
 
 const AttachmentItem = ({ file, onRemove, onOpen }: { file: Attachment; onRemove?: () => void; onOpen?: () => void }) => {
   const url = useQuery(api.files.getUrl, file.storageId ? { storageId: file.storageId } : "skip");
@@ -48,36 +42,29 @@ const AttachmentItem = ({ file, onRemove, onOpen }: { file: Attachment; onRemove
   }
 
   return (
-    <div 
-      className="flex items-center gap-2 px-2 py-1 bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] rounded-lg text-xs group shadow-sm"
+    <button 
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onOpen?.(); }}
+      className="flex items-center gap-2 px-2 py-1 bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] rounded-lg text-xs group shadow-sm hover:border-[var(--color-primary)] transition-all hover:shadow-md active:scale-95"
       style={{ transform: `rotate(${tilt}deg)` }}
     >
-      {url ? (
-        <a 
-          href={url} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="flex items-center gap-2 hover:text-[var(--color-primary)] transition-colors"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <FileText size={12} />
-          <span className="max-w-[120px] truncate">{file.name}</span>
-        </a>
-      ) : (
-        <div className="flex items-center gap-2 text-[var(--color-muted)]">
-          <FileText size={12} />
-          <span className="max-w-[120px] truncate">{file.name}</span>
-        </div>
-      )}
+      <div className="flex items-center gap-2 transition-colors">
+        <FileText size={12} className="text-[var(--color-muted)] group-hover:text-[var(--color-primary)]" />
+        <span className="max-w-[120px] truncate text-[var(--color-muted)] group-hover:text-[var(--color-ink)]">{file.name}</span>
+      </div>
       {onRemove && (
         <button
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="p-0.5 hover:bg-black/5 rounded text-[var(--color-muted)] hover:text-red-500 ml-1"
+          type="button"
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            onRemove(); 
+          }}
+          className="p-0.5 hover:bg-black/5 rounded text-[var(--color-muted)] hover:text-red-500 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <Trash2 size={12} />
         </button>
       )}
-    </div>
+    </button>
   );
 };
 
@@ -128,6 +115,7 @@ export function TaskRow({
   const [internalIsExpanded, setInternalIsExpanded] = useState(false);
 
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
+  const [showDeleteRecurrenceModal, setShowDeleteRecurrenceModal] = useState(false);
   const pendingUpdatesRef = useRef<any>(null);
 
   const checklistRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -301,14 +289,15 @@ export function TaskRow({
     handleUpdate({ ...updates, updateMode }); // fire-and-forget
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (updateMode: "single" | "future" | "all" = "single") => {
     try {
       if (onRemoveLocal) {
         onRemoveLocal();
       } else {
-        await deleteTask({ id: id as Id<"tasks"> });
+        await deleteTask({ id: id as Id<"tasks">, updateMode });
       }
       setShowDeleteConfirm(false);
+      setShowDeleteRecurrenceModal(false);
     } catch (error) {
       console.error("Failed to delete task:", error);
     }
@@ -345,8 +334,8 @@ export function TaskRow({
     if (!isExpanded) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      // If any picker is open, let the picker's overlay handle it
-      if (showWhenPicker || showWhoPicker) return;
+      // If any picker or modal is open, let the picker's/modal's overlay handle it
+      if (showWhenPicker || showWhoPicker || showDeleteConfirm || showDeleteRecurrenceModal || showRecurrenceModal) return;
 
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         saveRef.current();
@@ -601,7 +590,7 @@ export function TaskRow({
                     </div>
                   )}
 
-                  <ImagePreviewModal 
+                  <FilePreviewModal 
                     file={previewImage?.file || null}
                     isOpen={!!previewImage}
                     onClose={() => setPreviewImage(null)}
@@ -625,7 +614,14 @@ export function TaskRow({
             <div className="flex items-center justify-between mt-4">
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  if (isRecurring && !onRemoveLocal) {
+                    setShowDeleteRecurrenceModal(true);
+                  } else {
+                    setShowDeleteConfirm(true); 
+                  }
+                }}
                 className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)] transition-colors"
                 title="Delete Task"
               >
@@ -797,7 +793,7 @@ export function TaskRow({
         )}
       </AnimatePresence>
 
-      <RecurrenceEditModal 
+      <RecurrenceEditModal
         isOpen={showRecurrenceModal}
         onClose={() => setShowRecurrenceModal(false)}
         onConfirm={(mode) => performSave(pendingUpdatesRef.current, mode)}
@@ -805,7 +801,16 @@ export function TaskRow({
         strategy={recurrenceStrategy}
       />
 
+      <RecurrenceEditModal
+        isOpen={showDeleteRecurrenceModal}
+        onClose={() => setShowDeleteRecurrenceModal(false)}
+        onConfirm={(mode) => handleDelete(mode)}
+        actionType="delete"
+        strategy={recurrenceStrategy}
+      />
+
       <Modal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)}>
+
         <div className="bg-white rounded-2xl p-6 shadow-xl border border-[var(--color-hairline)] max-w-sm mx-auto">
           <h3 className="text-lg font-bold mb-2">Delete Task?</h3>
           <p className="text-[var(--color-muted)] text-sm mb-6">Are you sure you want to delete this task? This action cannot be undone.</p>

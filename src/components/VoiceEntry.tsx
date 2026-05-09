@@ -23,6 +23,8 @@ import Modal from "./Modal";
 import { TaskRow } from "./TaskRow";
 import { parseDueDate, toDateKey } from "../lib/dateUtils";
 
+import { RecurrenceRule } from "./RecurrencePickerModal";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ParsedTask {
@@ -33,6 +35,7 @@ interface ParsedTask {
   assigneeId: string | null;
   dueDate: string | null;
   categoryId: string | null;
+  recurrence: RecurrenceRule | null;
 }
 
 export interface VoiceEntryHandle {
@@ -181,8 +184,10 @@ function ReviewModal({
                   assigneeId={task.assigneeId ? (task.assigneeId as Id<"users">) : undefined}
                   categoryId={task.categoryId ? (task.categoryId as Id<"categories">) : undefined}
                   dueDate={task.dueDate ?? undefined}
+                  recurrence={task.recurrence}
                   isPrivate={false}
-                  isRecurring={false} // Voice entry tasks are newly created, not recurring yet
+                  isRecurring={false} // New tasks don't need "update mode" modal
+                  recurrenceStrategy={task.recurrence?.strategy}
                   onToggle={() => {}}
                   onSaveLocal={(updates) => updateTask(task.id, updates)}
                   onRemoveLocal={() => removeTask(task.id)}
@@ -397,6 +402,11 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
           assigneeId: t.assigneeId ?? null,
           dueDate,
           categoryId: t.categoryId ?? null,
+          recurrence: t.recurrence ? {
+            strategy: t.recurrence.strategy as any,
+            frequency: t.recurrence.frequency as any,
+            interval: t.recurrence.interval,
+          } : null,
         };
       }));
     } catch (err: unknown) {
@@ -419,6 +429,7 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
             assigneeId: toConvexAssigneeId(t.assigneeId, familyId),
             categoryId: t.categoryId ? (t.categoryId as Id<"categories">) : undefined,
             dueDate: t.dueDate ?? undefined,
+            recurrence: t.recurrence ?? undefined,
           });
         })
       );
@@ -454,7 +465,8 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
           assigneeId: t.assigneeId ?? undefined,
           date: t.dueDate?.split('T')[0] ?? undefined,
           time: t.dueDate?.includes('T') ? t.dueDate.split('T')[1].slice(0, 5) : undefined,
-          categoryId: t.categoryId ?? undefined
+          categoryId: t.categoryId ?? undefined,
+          recurrence: t.recurrence ?? undefined,
         })),
         familyMembers: members,
         familyId: familyId ?? "",
@@ -476,6 +488,11 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
           assigneeId: t.assigneeId ?? null,
           dueDate,
           categoryId: t.categoryId ?? null,
+          recurrence: t.recurrence ? {
+            strategy: t.recurrence.strategy as any,
+            frequency: t.recurrence.frequency as any,
+            interval: t.recurrence.interval,
+          } : null,
         };
       }));
     } catch (err: unknown) {
@@ -499,7 +516,8 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
           assigneeId: task.assigneeId ?? undefined,
           date: task.dueDate?.split('T')[0] ?? undefined,
           time: task.dueDate?.includes('T') ? task.dueDate.split('T')[1].slice(0, 5) : undefined,
-          categoryId: task.categoryId ?? undefined
+          categoryId: task.categoryId ?? undefined,
+          recurrence: task.recurrence ?? undefined,
         },
         familyMembers: members,
         familyId: familyId ?? "",
@@ -521,6 +539,11 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
           assigneeId: t.assigneeId ?? null,
           dueDate,
           categoryId: t.categoryId ?? null,
+          recurrence: t.recurrence ? {
+            strategy: t.recurrence.strategy as any,
+            frequency: t.recurrence.frequency as any,
+            interval: t.recurrence.interval,
+          } : null,
         };
       }));
     } catch (err: unknown) {
@@ -529,6 +552,7 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
       setIsAiProcessing(false);
     }
   };
+
 
   return (
     <>

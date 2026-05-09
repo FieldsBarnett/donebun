@@ -85,6 +85,11 @@ export const getTasks = query({
     const expansionStart = args.start ? new Date(args.start) : now;
 
     for (const task of tasks) {
+      // Skip if this root task is explicitly excluded (to hide it while keeping the series alive)
+      const isRoot = !task.parentTaskId;
+      const isExcluded = isRoot && task.recurrence?.excludedDates?.includes(task.dueDate || "");
+      if (isExcluded) continue;
+
       expandedTasks.push({
         ...task,
         isRecurring: !!task.recurrence || !!task.parentTaskId,
@@ -390,6 +395,16 @@ export const deleteTask = mutation({
         return;
       }
       
+      // If it's the root of a recurring series, don't delete it.
+      // Instead, exclude its date and (if completion strategy) spawn next.
+      if (task._id === rootId && task.recurrence) {
+        await excludeVirtualDate(ctx as any, rootId, task.dueDate || "");
+        if (task.recurrence.strategy === "completion") {
+          await spawnNextCompletionTask(ctx as any, task);
+        }
+        return;
+      }
+
       // Delete attachments from storage
       const attachments = task.attachments || [];
       for (const att of attachments) {
@@ -401,11 +416,11 @@ export const deleteTask = mutation({
         }
       }
 
-      await ctx.db.delete(task._id);
-
       if (task.recurrence?.strategy === "completion") {
          await spawnNextCompletionTask(ctx as any, task);
       }
+      
+      await ctx.db.delete(task._id);
       return;
     }
 

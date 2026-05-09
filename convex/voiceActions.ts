@@ -157,6 +157,10 @@ Rules:
 - "date" should be a YYYY-MM-DD string if a date was mentioned. Otherwise null.
 - "time" should be an HH:MM string in 24-hour format if a specific time was mentioned. Otherwise null.
 - "categoryId" must be one of the valid category IDs above if mentioned, otherwise null.
+- "recurrence" should be an object if the task is mentioned as recurring (e.g., "every day", "weekly", "every Tuesday"). Otherwise null.
+  - "strategy": "fixed" for tasks scheduled on specific dates (e.g., "every Monday") or "completion" for tasks that should recur after they are finished (e.g., "every 3 days after I finish it"). Default to "fixed" if not specified.
+  - "frequency": "daily", "weekly", "monthly", or "yearly".
+  - "interval": The number of frequency units between occurrences (e.g., "every 2 weeks" has frequency "weekly" and interval 2). Default is 1.
 - Return ONLY a valid JSON array.
 
 Schema:
@@ -167,7 +171,12 @@ Schema:
     "assigneeId": "string | null",
     "date": "string | null",
     "time": "string | null",
-    "categoryId": "string | null"
+    "categoryId": "string | null",
+    "recurrence": {
+      "strategy": "fixed | completion",
+      "frequency": "daily | weekly | monthly | yearly",
+      "interval": number
+    } | null
   }
 ]`;
 
@@ -196,6 +205,11 @@ Schema:
       date: task?.date ?? null,
       time: task?.time ?? null,
       categoryId: task?.categoryId ?? null,
+      recurrence: task?.recurrence ? {
+        strategy: task.recurrence.strategy === "completion" ? "completion" : "fixed",
+        frequency: task.recurrence.frequency || "daily",
+        interval: typeof task.recurrence.interval === "number" ? task.recurrence.interval : 1,
+      } : null,
     }));
   },
 });
@@ -212,6 +226,11 @@ export const consolidateTasks = action({
         date: v.optional(v.string()),
         time: v.optional(v.string()),
         categoryId: v.optional(v.string()),
+        recurrence: v.optional(v.union(v.null(), v.object({
+          strategy: v.union(v.literal("fixed"), v.literal("completion")),
+          frequency: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly"), v.literal("yearly")),
+          interval: v.number(),
+        }))),
       })
     ),
     familyMembers: v.array(familyMemberValidator),
@@ -229,7 +248,13 @@ export const consolidateTasks = action({
       : "(no categories defined)";
 
     const taskList = args.tasks
-      .map((t, i) => `${i + 1}. "${t.title}"${t.details ? ` — ${t.details}` : ""}`)
+      .map((t, i) => {
+        let text = `${i + 1}. "${t.title}"${t.details ? ` — ${t.details}` : ""}`;
+        if (t.recurrence) {
+          text += ` (Recurrence: ${t.recurrence.frequency} every ${t.recurrence.interval} units, strategy: ${t.recurrence.strategy})`;
+        }
+        return text;
+      })
       .join("\n");
 
     const systemPrompt = `You are a task consolidation assistant. Merge all the following tasks into a single coherent task.
@@ -240,7 +265,19 @@ Current user: ${args.currentUserName} (id: ${args.currentUserId})
 Valid assignees: ${assigneeList}
 Valid categories: ${categoryList}
 
-Schema: [{ "title": "string", "details": "string | null", "assigneeId": "string | null", "date": "string | null", "time": "string | null", "categoryId": "string | null" }]`;
+Schema: [{ 
+  "title": "string", 
+  "details": "string | null", 
+  "assigneeId": "string | null", 
+  "date": "string | null", 
+  "time": "string | null", 
+  "categoryId": "string | null",
+  "recurrence": {
+    "strategy": "fixed | completion",
+    "frequency": "daily | weekly | monthly | yearly",
+    "interval": number
+  } | null
+}]`;
 
     const text = await callLLM(systemPrompt, `Tasks to consolidate:\n${taskList}`);
 
@@ -266,6 +303,11 @@ Schema: [{ "title": "string", "details": "string | null", "assigneeId": "string 
       date: task?.date ?? null,
       time: task?.time ?? null,
       categoryId: task?.categoryId ?? null,
+      recurrence: task?.recurrence ? {
+        strategy: task.recurrence.strategy === "completion" ? "completion" : "fixed",
+        frequency: task.recurrence.frequency || "daily",
+        interval: typeof task.recurrence.interval === "number" ? task.recurrence.interval : 1,
+      } : null,
     }));
   },
 });
@@ -285,6 +327,11 @@ export const splitTask = action({
       date: v.optional(v.string()),
       time: v.optional(v.string()),
       categoryId: v.optional(v.string()),
+      recurrence: v.optional(v.union(v.null(), v.object({
+        strategy: v.union(v.literal("fixed"), v.literal("completion")),
+        frequency: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly"), v.literal("yearly")),
+        interval: v.number(),
+      }))),
     }),
     familyMembers: v.array(familyMemberValidator),
     familyId: v.string(),
@@ -308,11 +355,27 @@ Current user: ${args.currentUserName} (id: ${args.currentUserId})
 Valid assignees: ${assigneeList}
 Valid categories: ${categoryList}
 
-Schema: [{ "title": "string", "details": "string | null", "checklist": ["string"], "assigneeId": "string | null", "date": "string | null", "time": "string | null", "categoryId": "string | null" }]`;
+Schema: [{ 
+  "title": "string", 
+  "details": "string | null", 
+  "checklist": ["string"], 
+  "assigneeId": "string | null", 
+  "date": "string | null", 
+  "time": "string | null", 
+  "categoryId": "string | null",
+  "recurrence": {
+    "strategy": "fixed | completion",
+    "frequency": "daily | weekly | monthly | yearly",
+    "interval": number
+  } | null
+}]`;
 
     let taskText = `Task: "${args.task.title}"${args.task.details ? `\nDetails: ${args.task.details}` : ""}`;
     if (args.task.checklist && args.task.checklist.length > 0) {
       taskText += `\nChecklist:\n${args.task.checklist.map(c => `- ${c.text}`).join("\n")}`;
+    }
+    if (args.task.recurrence) {
+      taskText += `\nRecurrence: ${args.task.recurrence.frequency} every ${args.task.recurrence.interval} units, strategy: ${args.task.recurrence.strategy}`;
     }
 
     const text = await callLLM(systemPrompt, taskText);
@@ -335,6 +398,7 @@ Schema: [{ "title": "string", "details": "string | null", "checklist": ["string"
     const parentAssigneeId = args.task.assigneeId ?? null;
     const parentCategoryId = args.task.categoryId ?? null;
     const parentDate = args.task.date ?? null;
+    const parentRecurrence = args.task.recurrence ?? null;
 
     return taskArray.map((task) => ({
       title: task?.title || "Untitled Task",
@@ -348,6 +412,11 @@ Schema: [{ "title": "string", "details": "string | null", "checklist": ["string"
       date: task?.date ?? parentDate,
       time: task?.time ?? null,
       categoryId: task?.categoryId ?? parentCategoryId,
+      recurrence: task?.recurrence ? {
+        strategy: task.recurrence.strategy === "completion" ? "completion" : "fixed",
+        frequency: task.recurrence.frequency || "daily",
+        interval: typeof task.recurrence.interval === "number" ? task.recurrence.interval : 1,
+      } : parentRecurrence,
     }));
   },
 });
