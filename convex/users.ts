@@ -29,11 +29,26 @@ export const store = mutation({
     }
 
     // If it's a new identity, create a new User.
-    return await ctx.db.insert("users", {
+    const userId = await ctx.db.insert("users", {
       name: identity.name ?? "Anonymous",
       email: identity.email ?? "",
       tokenIdentifier: identity.subject,
     });
+
+    // Create a default "Solo Family" for the new user
+    const familyId = await ctx.db.insert("families", {
+      name: `${identity.name ?? "Anonymous"}'s Planner`,
+      ownerId: userId,
+      inviteCode: crypto.randomUUID(),
+    });
+
+    // Assign the user to their new solo family
+    await ctx.db.patch(userId, {
+      familyId: familyId,
+      colorCode: "blue", // Give them a default color
+    });
+
+    return userId;
   },
 });
 

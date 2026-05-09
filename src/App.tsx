@@ -145,7 +145,7 @@ function Layout({
         </div>
         
         {/* Mobile Nav Links */}
-        <div className="flex items-center justify-around h-14 px-2">
+        <div className="flex items-center justify-around h-16 px-2 pb-5">
           <NavLink to="/" end className={({ isActive }) => `flex flex-col items-center justify-center w-full h-full ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted)] hover:text-black'}`}>
             <LayoutDashboard size={22} />
           </NavLink>

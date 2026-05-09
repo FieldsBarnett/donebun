@@ -61,13 +61,18 @@ The application will replicate the core organizational structure and elegant UX 
 Expanding beyond single-player mode, the app introduces family dynamics:
 
 *   **Family Workspaces**: Users can create a family unit with a single click. The backend automatically generates a random UUID-based **Invite Code** and a default family name.
+*   **The "Solo Family" Architecture**: To simplify data handling and ensure the UI never deals with an empty family state, a user is **always** in a family. When a user first signs up, or if they leave an existing family, they are automatically placed into a newly generated "Solo Family" where they are the sole member. 
+*   **Leaving a Family & Task Re-assignment**: When a user leaves a family, to prevent data loss for the household, intelligent re-assignment logic triggers:
+    *   **Personal / Private Tasks**: Any task that has `isPrivate === true` or is explicitly assigned to the leaving user (`assigneeId === leavingUser`) goes with the user to their new Solo Family.
+    *   **Delegated Tasks**: If the leaving user created a task but assigned it to a *different* family member, the task **stays** in the old family. Its ownership (`ownerId`) is transferred to the owner of the family, so the assignee can still complete it.
+    *   **Family Pool Tasks**: If the leaving user created a task for the general family pool (`assigneeId === undefined`), the task **stays** in the old family. Its ownership is also transferred to the owner of the family.
 *   **Invite Links**: Families are joined via unique, shareable invite links based on the family's UUID. 
 *   **Membership Policy**: A user can belong to only one family workspace at a time. To join a new family, a user must explicitly **leave** their current one, which requires a confirmation step.
 *   **Family Management & Colors**: A dedicated settings view to manage family members and access the invite link. Each person can customize their identifying color and set their initials (max 2 characters) to easily distinguish their tasks and events visually across the app via circular markers. Tasks assigned to the "Family" generally (unclaimed) are identified by a family icon instead of a member's marker.
 *   **Task Assignment**: Tasks can be assigned to:
     *   A specific family member.
     *   The "Family" generally (e.g., "Take out the trash" as a shared pool task).
-*   **Privacy Model**: All tasks are fully public to the family workspace by default. However, any task can be explicitly toggled as **"Private"** via a dedicated lock icon button in the task entry or detail views. Private tasks are only visible to their owner and are marked with a lock icon 🔒 in all list views. There are no special "private" categories; the privacy status is an independent boolean flag.
+*   **Privacy Model**: All tasks are fully public to the family workspace by default. However, any task can be explicitly toggled as **"Private"** via a dedicated lock icon button in the task entry or detail views. Private tasks are only visible to their creator AND the person assigned to the task. They are marked with a lock icon 🔒 in all list views. There are no special "private" categories; the privacy status is an independent boolean flag.
 
 ## 5. Google Calendar Integration
 A powerful, family-aware calendar sync feature allows users to view their schedule alongside tasks.

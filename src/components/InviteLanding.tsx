@@ -12,6 +12,13 @@ export default function InviteLanding() {
   const family = useQuery(api.families.getByInviteCode, inviteCode ? { inviteCode } : "skip");
   const joinFamily = useMutation(api.families.join);
   
+  const currentFamilyMembers = useQuery(api.families.getMembers, 
+    user?.familyId ? { familyId: user.familyId } : "skip"
+  );
+  
+  const isInSharedFamily = user?.familyId && currentFamilyMembers && currentFamilyMembers.length > 1;
+  const isAlreadyInThisFamily = user?.familyId === family?._id;
+
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -51,7 +58,7 @@ export default function InviteLanding() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-[var(--color-surface-soft)] text-center">
       <div className="bg-white p-10 rounded-2xl shadow-sm border border-[var(--color-hairline)] max-w-md w-full flex flex-col items-center">
-        <div className="w-20 h-20 bg-[var(--color-surface-soft)] rounded-full flex items-center justify-center mb-6">
+        <div className="w-20 h-20 bg-[var(--color-surface-soft)] rounded-full flex items-center justify-center mb-6 shrink-0 aspect-square overflow-hidden">
           <Users size={40} className="text-[var(--color-primary)]" />
         </div>
         
@@ -62,10 +69,17 @@ export default function InviteLanding() {
               You've been invited to join a family workspace on DoneBun.
             </p>
 
-            {user?.familyId ? (
+            {isInSharedFamily ? (
               <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-6 text-amber-800 text-sm flex items-start gap-3 text-left">
                 <AlertCircle size={20} className="shrink-0 mt-0.5" />
-                <p>You are already in a family. You must leave your current family in Settings before you can join a new one.</p>
+                <p>You are already in a shared family. You must leave your current family in Settings before you can join a new one.</p>
+              </div>
+            ) : null}
+
+            {isAlreadyInThisFamily && !isInSharedFamily ? (
+              <div className="bg-green-50 border border-green-200 p-4 rounded-xl mb-6 text-green-800 text-sm flex items-start gap-3 text-left">
+                <CheckCircle2 size={20} className="shrink-0 mt-0.5 text-green-600" />
+                <p>You are already a member of this family!</p>
               </div>
             ) : null}
 
@@ -79,7 +93,7 @@ export default function InviteLanding() {
             <div className="w-full space-y-3">
               <button 
                 onClick={handleJoin}
-                disabled={isJoining || !!user?.familyId || !family}
+                disabled={isJoining || isInSharedFamily || isAlreadyInThisFamily || !family}
                 className="w-full flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#005bb5] transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
               >
                 {isJoining ? "Joining..." : "Accept Invitation"}

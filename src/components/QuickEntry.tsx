@@ -375,7 +375,7 @@ export default function QuickEntry({ isOpen, onClose }: QuickEntryProps) {
                       className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-black/5 rounded-lg transition-colors text-left"
                     >
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full flex items-center justify-center bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] text-[var(--color-muted)] shadow-sm">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] text-[var(--color-muted)] shadow-sm shrink-0 aspect-square overflow-hidden">
                           <Users size={12} />
                         </div>
                         Family
@@ -391,7 +391,7 @@ export default function QuickEntry({ isOpen, onClose }: QuickEntryProps) {
                       >
                         <div className="flex items-center gap-2 overflow-hidden">
                           <div
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-sm"
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-sm aspect-square overflow-hidden"
                             style={{ backgroundColor: member.colorCode || 'var(--color-primary)' }}
                           >
                             {member.initials || member.name.charAt(0).toUpperCase()}

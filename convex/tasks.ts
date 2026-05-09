@@ -32,7 +32,8 @@ export const getTasks = query({
           q.neq(q.field("status"), "deleted"),
           q.or(
             q.eq(q.field("isPrivate"), false),
-            q.eq(q.field("ownerId"), user?._id)
+            q.eq(q.field("ownerId"), user?._id),
+            q.eq(q.field("assigneeId"), user?._id)
           )
         )
       )

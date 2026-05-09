@@ -56,7 +56,7 @@ export default function AccountSettings({ onBack }: AccountSettingsProps) {
           <div className="p-6 border border-[var(--color-hairline)] rounded-3xl bg-white space-y-6">
             <div className="flex items-center gap-6">
               <div 
-                className="w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-bold shadow-md" 
+                className="w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-bold shadow-md shrink-0 aspect-square overflow-hidden" 
                 style={{ backgroundColor: user.colorCode || 'var(--color-primary)' }}
               >
                 {user.initials || user.name.charAt(0).toUpperCase()}

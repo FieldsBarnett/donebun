@@ -77,7 +77,7 @@ export default function FamilySettings({ onBack }: FamilySettingsProps) {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs font-bold text-[var(--color-muted)] uppercase tracking-widest">Family Workspace</h3>
-            {user?.familyId && (
+            {user?.familyId && familyMembers && familyMembers.length > 1 && (
               <button 
                 onClick={handleLeaveFamily}
                 className="text-xs text-red-600 font-medium hover:underline flex items-center gap-1"
@@ -120,7 +120,7 @@ export default function FamilySettings({ onBack }: FamilySettingsProps) {
                     return (
                       <div key={member._id} className={`p-4 border border-[var(--color-hairline)] rounded-2xl bg-white ${isMe ? 'ring-2 ring-[var(--color-primary)]/10 border-[var(--color-primary)]/30' : ''}`}>
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-sm" style={{ backgroundColor: member.colorCode || 'var(--color-primary)' }}>
+                          <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-sm shrink-0 aspect-square overflow-hidden" style={{ backgroundColor: member.colorCode || 'var(--color-primary)' }}>
                             {member.initials || member.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="flex-1">
@@ -137,7 +137,7 @@ export default function FamilySettings({ onBack }: FamilySettingsProps) {
             </div>
           ) : (
             <div className="bg-[var(--color-surface-soft)]/50 border border-dashed border-[var(--color-hairline)] rounded-3xl p-10 flex flex-col items-center text-center">
-              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm">
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm shrink-0 aspect-square overflow-hidden">
                 <Users size={32} className="text-[var(--color-muted)]" />
               </div>
               <h4 className="text-lg font-bold mb-2">Start a Family</h4>

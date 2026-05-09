@@ -301,12 +301,12 @@ export function TaskRow({
 
                 <div className="">
                   {isFamilyPool ? (
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] text-[var(--color-muted)] shrink-0">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] text-[var(--color-muted)] shrink-0 aspect-square overflow-hidden">
                       <Users size={12} />
                     </div>
                   ) : assignee && (
                     <div
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm shrink-0"
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm shrink-0 aspect-square overflow-hidden"
                       style={{ backgroundColor: assignee.colorCode?.startsWith('#') ? assignee.colorCode : `var(--color-${assignee.colorCode || 'primary'})` }}
                     >
                       {assignee.initials || assignee.name[0]}
@@ -455,9 +455,9 @@ export function TaskRow({
                           {!localAssigneeId && <Check size={14} className="text-[var(--color-primary)]" />}
                         </button>
                         {familyMembers.map(m => (
-                          <button key={m._id} onClick={() => { setLocalAssigneeId(m._id); setShowWhoPicker(false); }} className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-black/5 rounded-lg transition-colors">
-                            <div className="flex items-center gap-2"><div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: m.colorCode || 'var(--color-primary)' }}>{m.initials || m.name[0]}</div>{m.name}</div>
-                            {localAssigneeId === m._id && <Check size={14} className="text-[var(--color-primary)]" />}
+                          <button key={m._id} onClick={() => { setLocalAssigneeId(m._id); setShowWhoPicker(false); }} className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-black/5 rounded-lg transition-colors text-left">
+                            <div className="flex items-center gap-2 overflow-hidden"><div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 aspect-square overflow-hidden" style={{ backgroundColor: m.colorCode || 'var(--color-primary)' }}>{m.initials || m.name[0]}</div><span className="truncate">{m.name}</span></div>
+                            {localAssigneeId === m._id && <Check size={14} className="text-[var(--color-primary)] shrink-0" />}
                           </button>
                         ))}
                       </PickerWrapper>

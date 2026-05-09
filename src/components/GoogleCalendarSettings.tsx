@@ -269,7 +269,7 @@ export default function GoogleCalendarSettings() {
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-[var(--color-surface-soft)] transition-colors"
                           >
                             <div
-                              className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                              className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 aspect-square overflow-hidden"
                               style={{ backgroundColor: member.colorCode ?? "var(--color-primary)" }}
                             >
                               {member.name.charAt(0).toUpperCase()}
