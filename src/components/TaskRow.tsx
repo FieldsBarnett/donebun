@@ -167,9 +167,11 @@ export function TaskRow({
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Sync internal state with props when not expanded
+  // Sync internal state with props when not expanded OR if we haven't initialized yet
+  const [hasInitialized, setHasInitialized] = useState(false);
+
   useEffect(() => {
-    if (!isExpanded) {
+    if (!isExpanded || !hasInitialized) {
       setLocalTitle(initialTitle);
       setLocalDescription(initialDescription || "");
       setLocalChecklist(initialChecklist || []);
@@ -179,8 +181,11 @@ export function TaskRow({
       setLocalAssigneeId(assigneeId);
       setLocalCategoryId(categoryId);
       setLocalIsPrivate(isPrivate);
+      if (initialTitle || initialDescription || (initialAttachments && initialAttachments.length > 0) || (initialChecklist && initialChecklist.length > 0)) {
+        setHasInitialized(true);
+      }
     }
-  }, [initialTitle, initialDescription, initialChecklist, initialAttachments, dueDate, initialRecurrence, assigneeId, categoryId, isPrivate, isExpanded]);
+  }, [initialTitle, initialDescription, initialChecklist, initialAttachments, dueDate, initialRecurrence, assigneeId, categoryId, isPrivate, isExpanded, hasInitialized]);
 
   const handleUpdate = async (updates: any) => {
     try {
@@ -577,7 +582,7 @@ export function TaskRow({
                     </div>
                   )}
 
-                  {localAttachments.length > 0 && (
+                  {(localAttachments.length > 0 || isUploading) && (
                     <div className="flex flex-wrap gap-2 mt-4 mb-2">
                       {localAttachments.map((file, i) => (
                         <AttachmentItem 

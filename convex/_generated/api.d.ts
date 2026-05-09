@@ -12,7 +12,6 @@ import type * as auth from "../auth.js";
 import type * as calendars from "../calendars.js";
 import type * as categories from "../categories.js";
 import type * as crons from "../crons.js";
-import type * as debug from "../debug.js";
 import type * as families from "../families.js";
 import type * as files from "../files.js";
 import type * as google from "../google.js";
@@ -35,7 +34,6 @@ declare const fullApi: ApiFromModules<{
   calendars: typeof calendars;
   categories: typeof categories;
   crons: typeof crons;
-  debug: typeof debug;
   families: typeof families;
   files: typeof files;
   google: typeof google;
