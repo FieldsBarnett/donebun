@@ -9,6 +9,9 @@ export default defineSchema({
     familyId: v.optional(v.id("families")),
     colorCode: v.optional(v.string()), // e.g. 'orange', 'pink' corresponding to design tokens
     initials: v.optional(v.string()), // max 2 letters
+    preferences: v.optional(v.object({
+      moveTasksToLogbook: v.union(v.literal("immediately"), v.literal("next_day")),
+    })),
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_family", ["familyId"]),
 
@@ -46,10 +49,22 @@ export default defineSchema({
     familyId: v.id("families"),
     isPrivate: v.boolean(), // Tasks placed in the special "Private 🔒" category
     statusSet: v.optional(v.number()), // Timestamp of when the status was last set
+    checklist: v.optional(v.array(v.object({
+      text: v.string(),
+      completed: v.boolean(),
+    }))),
+    attachments: v.optional(v.array(v.object({
+      storageId: v.string(), // The Convex storage ID
+      name: v.string(),      // Original file name
+      type: v.string(),      // MIME type
+    }))),
   })
     .index("by_family", ["familyId"])
     .index("by_assignee", ["assigneeId"])
-    .index("by_category", ["categoryId"]),
+    .index("by_category", ["categoryId"])
+    .index("by_family_dueDate", ["familyId", "dueDate"])
+    .index("by_parent", ["parentTaskId"])
+    .index("by_statusSet", ["statusSet"]),
 
 
   googleAccounts: defineTable({
@@ -69,6 +84,7 @@ export default defineSchema({
     familyId: v.id("families"),
     syncToken: v.optional(v.string()), // For incremental sync
     color: v.optional(v.string()), // Custom color for events from this calendar
+    syncEnabled: v.optional(v.boolean()), // Whether this calendar should be synced and displayed
   })
     .index("by_family", ["familyId"])
     .index("by_assignee", ["assigneeId"])
@@ -85,5 +101,6 @@ export default defineSchema({
     isAllDay: v.boolean(),
   })
     .index("by_calendar", ["calendarId"])
-    .index("by_googleEventId", ["googleEventId"]),
+    .index("by_googleEventId", ["googleEventId"])
+    .index("by_start", ["start"]),
 });

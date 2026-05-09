@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { motion, AnimatePresence } from "framer-motion";
 import FamilySettings from "./FamilySettings";
 import AccountSettings from "./AccountSettings";
 import GoogleCalendarSettings from "./GoogleCalendarSettings";
 import Logbook from "./Logbook";
-import { User, Users, Calendar, ChevronRight, ChevronLeft, BookOpen } from "lucide-react";
-import { filterTasks, FilterMode } from "../lib/filterUtils";
+import { User, Users, Calendar, ChevronRight, ChevronLeft, BookOpen, Settings2, Check } from "lucide-react";
+import { FilterMode } from "../lib/filterUtils";
 
-type SettingsView = "main" | "family" | "calendar" | "account" | "logbook";
+type SettingsView = "main" | "family" | "calendar" | "account" | "logbook" | "preferences";
 
 export default function Settings({ filterMode }: { filterMode: FilterMode }) {
   const [view, setView] = useState<SettingsView>(() => {
@@ -19,10 +19,7 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
   });
 
   const currentUser = useQuery(api.users.getCurrentUser);
-  const tasks = useQuery(api.tasks.getTasks) || [];
-
-  const completedCount = filterTasks(tasks, currentUser, filterMode)
-    .filter((t: any) => t.status === "completed").length;
+  const updatePreferences = useMutation(api.users.updatePreferences);
 
   // Handle hardware back button / popstate if needed (optional for web but good for UX)
   useEffect(() => {
@@ -47,6 +44,8 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
       opacity: 1,
     }),
   };
+
+  const moveTasksPreference = currentUser?.preferences?.moveTasksToLogbook || "next_day";
 
   return (
     <div className="relative h-screen overflow-hidden bg-white">
@@ -74,6 +73,11 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
                 onClick={() => setView("family")}
               />
               <SettingsGroup 
+                icon={<Settings2 size={22} className="text-[#8e8e93]" />}
+                title="Preferences"
+                onClick={() => setView("preferences")}
+              />
+              <SettingsGroup 
                 icon={<Calendar size={22} className="text-[#34c759]" />}
                 title="Calendar Sync"
                 onClick={() => setView("calendar")}
@@ -81,7 +85,6 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
               <SettingsGroup 
                 icon={<BookOpen size={22} className="text-[#32ade6]" />}
                 title="Logbook"
-                badge={completedCount > 0 ? completedCount : undefined}
                 onClick={() => setView("logbook")}
               />
             </div>
@@ -115,6 +118,60 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
             className="absolute inset-0"
           >
             <AccountSettings onBack={() => setView("main")} />
+          </motion.div>
+        )}
+
+        {view === "preferences" && (
+          <motion.div
+            key="preferences"
+            custom={1}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute inset-0 bg-white"
+          >
+            <div className="flex flex-col h-full">
+              <div className="px-6 py-4 border-b border-[var(--color-hairline)] flex items-center gap-4 sticky top-0 bg-white z-10">
+                <button 
+                  onClick={() => setView("main")}
+                  className="p-2 -ml-2 hover:bg-[var(--color-surface-soft)] rounded-full transition-colors text-[var(--color-muted)]"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+                <h2 className="text-xl font-bold tracking-tight">Preferences</h2>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-8">
+                <div className="max-w-3xl mx-auto space-y-8">
+                  <section>
+                    <h3 className="text-sm font-bold text-[var(--color-muted)] uppercase tracking-wider mb-4 px-1">Task Management</h3>
+                    <div className="bg-[var(--color-surface-soft)]/50 rounded-3xl overflow-hidden border border-[var(--color-hairline)]">
+                      <div className="px-6 py-5 border-b border-[var(--color-hairline)]">
+                        <p className="font-bold text-lg mb-1">Move tasks to Logbook</p>
+                        <p className="text-sm text-[var(--color-muted)]">Choose when completed tasks are moved out of your main view.</p>
+                      </div>
+                      
+                      <button 
+                        onClick={() => updatePreferences({ moveTasksToLogbook: "immediately" })}
+                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-white transition-colors group"
+                      >
+                        <span className={`text-base ${moveTasksPreference === "immediately" ? "font-bold" : "font-medium"}`}>Immediately after completion</span>
+                        {moveTasksPreference === "immediately" && <Check size={20} className="text-[#007aff]" />}
+                      </button>
+                      
+                      <button 
+                        onClick={() => updatePreferences({ moveTasksToLogbook: "next_day" })}
+                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-white transition-colors group border-t border-[var(--color-hairline)]"
+                      >
+                        <span className={`text-base ${moveTasksPreference === "next_day" ? "font-bold" : "font-medium"}`}>The next day</span>
+                        {moveTasksPreference === "next_day" && <Check size={20} className="text-[#007aff]" />}
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 

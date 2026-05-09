@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { TaskRow } from "./TaskRow";
 import { CalendarDays, Calendar, Clock } from "lucide-react";
@@ -12,12 +12,14 @@ type Task = {
   _id: string;
   title: string;
   description?: string;
+  checklist?: { text: string; completed: boolean }[];
   status: "active" | "completed";
   dueDate?: string;
   ownerId: string;
   assigneeId?: string;
   categoryId?: string;
   isPrivate: boolean;
+  recurrence?: any;
 };
 
 type CalendarEvent = {
@@ -122,64 +124,104 @@ function EventRow({ event }: { event: CalendarEvent & { assigneeId?: string, col
 
 // --- Main component ---
 export default function Timeline({ filterMode }: { filterMode: FilterMode }) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const taskId = searchParams.get("taskId");
+
+  // Define a stable window for the timeline (e.g. -2 months to +1 year)
+  // We normalize to the start of the day to ensure the query arguments are stable
+  // across tab switches, preventing redundant re-fetches.
+  const { queryStart, queryEnd } = useMemo(() => {
+    const s = new Date();
+    s.setMonth(s.getMonth() - 2);
+    s.setHours(0, 0, 0, 0); // Normalize to start of day
+    
+    const e = new Date();
+    e.setFullYear(e.getFullYear() + 1);
+    e.setHours(23, 59, 59, 999); // Normalize to end of day
+    
+    return { queryStart: s.toISOString(), queryEnd: e.toISOString() };
+  }, []);
 
   const currentUser = useQuery(api.users.getCurrentUser);
-  const allTasks = (useQuery(api.tasks.getTasks) || []) as Task[];
-  const allCalendarEvents = (useQuery(api.calendars.getEventsByFamily) || []) as (CalendarEvent & { assigneeId?: string })[];
+  const allTasksFetched = (useQuery(api.tasks.getTasks, { start: queryStart, end: queryEnd }) || []) as Task[];
+  const allCalendarEvents = (useQuery(api.calendars.getEventsByFamily, { start: queryStart, end: queryEnd }) || []) as (CalendarEvent & { assigneeId?: string })[];
   const categories = useQuery(api.categories.list) || [];
   const updateStatus = useMutation(api.tasks.updateTaskStatus);
 
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const moveTasksPreference = currentUser?.preferences?.moveTasksToLogbook || "next_day";
+
   // Filter items
-  const tasks = filterTasks(allTasks, currentUser, filterMode);
-  const calendarEvents = filterCalendarEvents(allCalendarEvents, currentUser, filterMode);
+  const tasks = useMemo(() => {
+    const filteredByPrivacy = filterTasks(allTasksFetched, currentUser, filterMode);
+    return filteredByPrivacy.filter(t => {
+      if (t.status === "active") return true;
+      if (t.status === "completed") {
+        // Rule: Tasks from the past should still be shown no matter what
+        if (t.dueDate) {
+          const due = parseDueDate(t.dueDate).getTime();
+          if (due < startOfToday) return true;
+        }
+
+        // Rule: Show if completed today and preference is next_day
+        if (moveTasksPreference === "next_day" && (t as any).statusSet && isSameDay(new Date((t as any).statusSet), today)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [allTasksFetched, currentUser, filterMode, moveTasksPreference, startOfToday]);
+  const calendarEvents = useMemo(() => filterCalendarEvents(allCalendarEvents, currentUser, filterMode), [allCalendarEvents, currentUser, filterMode]);
 
   // Build a map: dateKey -> DayItem[]
-  const dayMap = new Map<string, DayItem[]>();
+  const dayMap = useMemo(() => {
+    const map = new Map<string, DayItem[]>();
 
-  for (const task of tasks) {
-    if (!task.dueDate) continue;
-    const key = toDateKey(parseDueDate(task.dueDate));
-    if (!dayMap.has(key)) dayMap.set(key, []);
-    dayMap.get(key)!.push({
-      kind: "task",
-      task,
-      timeMs: getTimeMs(task.dueDate),
-    });
-  }
+    for (const task of tasks) {
+      if (!task.dueDate) continue;
+      const key = toDateKey(parseDueDate(task.dueDate));
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push({
+        kind: "task",
+        task,
+        timeMs: getTimeMs(task.dueDate),
+      });
+    }
 
-  for (const event of calendarEvents) {
-    const key = toDateKey(parseDueDate(event.start));
-    if (!dayMap.has(key)) dayMap.set(key, []);
-    dayMap.get(key)!.push({
-      kind: "event",
-      event,
-      timeMs: getTimeMs(event.start),
-    });
-  }
+    for (const event of calendarEvents) {
+      const key = toDateKey(parseDueDate(event.start));
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push({
+        kind: "event",
+        event,
+        timeMs: getTimeMs(event.start),
+      });
+    }
 
-  // Sort items within each day: no-time items first (tasks without specific time at top),
-  // then timed items chronologically
-  for (const [key, items] of dayMap) {
-    dayMap.set(
-      key,
-      items.sort((a, b) => {
-        // All-day / no-time tasks go first
-        if (a.timeMs === null && b.timeMs !== null) return -1;
-        if (a.timeMs !== null && b.timeMs === null) return 1;
-        if (a.timeMs === null && b.timeMs === null) {
-          // tasks before events among untimed
-          if (a.kind === "task" && b.kind === "event") return -1;
-          if (a.kind === "event" && b.kind === "task") return 1;
-          return 0;
-        }
-        return (a.timeMs ?? 0) - (b.timeMs ?? 0);
-      })
-    );
-  }
+    // Sort items within each day: no-time items first (tasks without specific time at top),
+    // then timed items chronologically
+    for (const [key, items] of map) {
+      map.set(
+        key,
+        items.sort((a, b) => {
+          // All-day / no-time tasks go first
+          if (a.timeMs === null && b.timeMs !== null) return -1;
+          if (a.timeMs !== null && b.timeMs === null) return 1;
+          if (a.timeMs === null && b.timeMs === null) {
+            // tasks before events among untimed
+            if (a.kind === "task" && b.kind === "event") return -1;
+            if (a.kind === "event" && b.kind === "task") return 1;
+            return 0;
+          }
+          return (a.timeMs ?? 0) - (b.timeMs ?? 0);
+        })
+      );
+    }
+    return map;
+  }, [tasks, calendarEvents]);
 
   // Sorted list of date keys that have content
-  const today = new Date();
   const todayKey = toDateKey(today);
 
   const allKeys = Array.from(dayMap.keys()).sort();
@@ -197,7 +239,6 @@ export default function Timeline({ filterMode }: { filterMode: FilterMode }) {
   // Refs for scrolling to the correct section
   const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
-  const hasScrolledRef = useRef(false);
 
   const setSectionRef = useCallback((key: string, el: HTMLElement | null) => {
     if (el) sectionRefs.current.set(key, el);
@@ -210,8 +251,7 @@ export default function Timeline({ filterMode }: { filterMode: FilterMode }) {
     const timer = setTimeout(() => {
       const el = sectionRefs.current.get(targetDateKey);
       if (el && containerRef.current) {
-        el.scrollIntoView({ behavior: hasScrolledRef.current ? "smooth" : "auto", block: "start" });
-        hasScrolledRef.current = true;
+        el.scrollIntoView({ behavior: "auto", block: "start" });
       }
     }, 100);
     return () => clearTimeout(timer);
@@ -336,17 +376,28 @@ export default function Timeline({ filterMode }: { filterMode: FilterMode }) {
                                     id={item.task._id as any}
                                     title={item.task.title}
                                     description={item.task.description}
+                                    checklist={item.task.checklist}
                                     completed={item.task.status === "completed"}
                                     ownerId={item.task.ownerId as any}
                                     assigneeId={item.task.assigneeId as any}
                                     categoryId={item.task.categoryId as any}
                                     dueDate={item.task.dueDate}
+                                    recurrence={item.task.recurrence}
                                     isPrivate={item.task.isPrivate}
                                     isRecurring={(item.task as any).isRecurring}
                                     recurrenceStrategy={(item.task as any).recurrence?.strategy}
                                     isToday={isToday}
                                     onToggle={() => handleToggleTask(item.task._id, item.task.status)}
-
+                                    isExpanded={taskId === item.task._id}
+                                    onToggleExpand={() => {
+                                      if (taskId === item.task._id) {
+                                        searchParams.delete("taskId");
+                                        setSearchParams(searchParams);
+                                      } else {
+                                        searchParams.set("taskId", item.task._id);
+                                        setSearchParams(searchParams);
+                                      }
+                                    }}
                                   />
                                 </div>
                               );

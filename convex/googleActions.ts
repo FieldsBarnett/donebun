@@ -226,10 +226,16 @@ async function fetchCalendarEventsLogic(
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Unauthenticated");
 
-  // Trigger a sync in the background so the next visit is up to date
-  await ctx.scheduler.runAfter(0, internal.googleActions.syncCalendar, {
+  const calendar: any = await ctx.runQuery(internal.google.getCalendarById, {
     calendarId: args.calendarId,
   });
+
+  // Trigger a sync in the background so the next visit is up to date, if enabled
+  if (calendar && calendar.syncEnabled !== false) {
+    await ctx.scheduler.runAfter(0, internal.googleActions.syncCalendar, {
+      calendarId: args.calendarId,
+    });
+  }
 
   // Query the local database via a query (needs to be defined in calendars.ts)
   return await ctx.runQuery(api.calendars.getEventsByCalendar, {

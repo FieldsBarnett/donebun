@@ -16,24 +16,8 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
   const monthScrollRef = useRef<HTMLDivElement>(null);
   const weekScrollRef = useRef<HTMLDivElement>(null);
 
-  const currentUser = useQuery(api.users.getCurrentUser);
-  const allCalendarEvents = useQuery(api.calendars.getEventsByFamily) || [];
-  const allTasks = useQuery(api.tasks.getTasks) || [];
-  const familyMembers = useQuery(api.users.getMyFamilyMembers) || [];
-
-  const calendarEvents = filterCalendarEvents(allCalendarEvents as any[], currentUser, filterMode);
-  const tasks = filterTasks(allTasks, currentUser, filterMode);
-
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const hours = Array.from({ length: 24 }).map((_, i) => {
-    if (i === 0) return "12 AM";
-    if (i < 12) return `${i} AM`;
-    if (i === 12) return "12 PM";
-    return `${i - 12} PM`;
-  });
-
   // Generate a continuous range of days (e.g., 3 months past to 6 months future)
-  const { allDays } = useMemo(() => {
+  const { allDays, startISO, endISO } = useMemo(() => {
     const today = new Date();
     const startMonth = new Date(today.getFullYear(), today.getMonth() - 3, 1);
     const start = new Date(startMonth);
@@ -50,8 +34,52 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
       return d;
     });
 
-    return { allDays: daysArr };
+    return { 
+      allDays: daysArr,
+      startISO: startMonth.toISOString(),
+      endISO: endMonth.toISOString()
+    };
   }, []);
+
+  const currentUser = useQuery(api.users.getCurrentUser);
+  const allCalendarEvents = useQuery(api.calendars.getEventsByFamily, { start: startISO, end: endISO }) || [];
+  const allTasksFetched = useQuery(api.tasks.getTasks, { start: startISO, end: endISO }) || [];
+  const familyMembers = useQuery(api.users.getMyFamilyMembers) || [];
+
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const moveTasksPreference = currentUser?.preferences?.moveTasksToLogbook || "next_day";
+
+  const calendarEvents = useMemo(() => filterCalendarEvents(allCalendarEvents as any[], currentUser, filterMode), [allCalendarEvents, currentUser, filterMode]);
+
+  const tasks = useMemo(() => {
+    const filteredByPrivacy = filterTasks(allTasksFetched as any[], currentUser, filterMode);
+    return filteredByPrivacy.filter(t => {
+      if (t.status === "active") return true;
+      if (t.status === "completed") {
+        // Rule: Tasks from the past should still be shown no matter what
+        if (t.dueDate) {
+          const due = parseDueDate(t.dueDate).getTime();
+          if (due < startOfToday) return true;
+        }
+
+        // Rule: Show if completed today and preference is next_day
+        if (moveTasksPreference === "next_day" && (t as any).statusSet && isSameDay(new Date((t as any).statusSet), today)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [allTasksFetched, currentUser, filterMode, moveTasksPreference, startOfToday]);
+
+
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const hours = Array.from({ length: 24 }).map((_, i) => {
+    if (i === 0) return "12 AM";
+    if (i < 12) return `${i} AM`;
+    if (i === 12) return "12 PM";
+    return `${i - 12} PM`;
+  });
 
   const scrollToToday = (instant = false) => {
     const todayStr = new Date().toDateString();
@@ -84,7 +112,7 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
 
   const handleToday = () => {
     setCurrentDate(new Date());
-    scrollToToday(false);
+    scrollToToday(true);
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {

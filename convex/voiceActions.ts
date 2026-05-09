@@ -277,6 +277,10 @@ export const splitTask = action({
     task: v.object({
       title: v.string(),
       details: v.optional(v.string()),
+      checklist: v.optional(v.array(v.object({
+        text: v.string(),
+        completed: v.boolean(),
+      }))),
       assigneeId: v.optional(v.string()),
       date: v.optional(v.string()),
       time: v.optional(v.string()),
@@ -304,9 +308,12 @@ Current user: ${args.currentUserName} (id: ${args.currentUserId})
 Valid assignees: ${assigneeList}
 Valid categories: ${categoryList}
 
-Schema: [{ "title": "string", "details": "string | null", "assigneeId": "string | null", "date": "string | null", "time": "string | null", "categoryId": "string | null" }]`;
+Schema: [{ "title": "string", "details": "string | null", "checklist": ["string"], "assigneeId": "string | null", "date": "string | null", "time": "string | null", "categoryId": "string | null" }]`;
 
-    const taskText = `Task: "${args.task.title}"${args.task.details ? `\nDetails: ${args.task.details}` : ""}`;
+    let taskText = `Task: "${args.task.title}"${args.task.details ? `\nDetails: ${args.task.details}` : ""}`;
+    if (args.task.checklist && args.task.checklist.length > 0) {
+      taskText += `\nChecklist:\n${args.task.checklist.map(c => `- ${c.text}`).join("\n")}`;
+    }
 
     const text = await callLLM(systemPrompt, taskText);
 
@@ -332,6 +339,7 @@ Schema: [{ "title": "string", "details": "string | null", "assigneeId": "string 
     return taskArray.map((task) => ({
       title: task?.title || "Untitled Task",
       details: task?.details ?? null,
+      checklist: Array.isArray(task?.checklist) ? task.checklist.map((text: string) => ({ text, completed: false })) : undefined,
       assigneeId: resolveAssigneeId(
         task?.assigneeId ?? parentAssigneeId,
         args.familyId,

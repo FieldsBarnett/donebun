@@ -1,4 +1,6 @@
 import { useQuery, useMutation } from "convex/react";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { TaskGroupedList } from "./TaskGroupedList";
 import SearchBar from "./SearchBar";
@@ -7,16 +9,39 @@ import { filterTasks, FilterMode } from "../lib/filterUtils";
 
 export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
   const currentUser = useQuery(api.users.getCurrentUser);
-  const tasks = useQuery(api.tasks.getTasks) || [];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const taskId = searchParams.get("taskId");
+  
+  const { start, end } = useMemo(() => {
+    const s = new Date();
+    s.setHours(0, 0, 0, 0);
+    const e = new Date();
+    e.setHours(23, 59, 59, 999);
+    return { start: s.toISOString(), end: e.toISOString() };
+  }, []);
+
+  const tasks = useQuery(api.tasks.getTasks, { start, end }) || [];
   const updateTaskStatus = useMutation(api.tasks.updateTaskStatus);
 
 
   const today = new Date();
+  const moveTasksPreference = currentUser?.preferences?.moveTasksToLogbook || "next_day";
 
   const filteredTasks = filterTasks(tasks, currentUser, filterMode);
 
-  const todayTasks = filteredTasks.filter(t => t.status === "active" && t.dueDate && isSameDay(parseDueDate(t.dueDate), today));
-  const unscheduledTasks = filteredTasks.filter(t => t.status === "active" && !t.dueDate);
+  const isVisible = (t: any) => {
+    if (t.status === "active") return true;
+    if (t.status === "completed") {
+      if (moveTasksPreference === "next_day") {
+        // Show if completed today
+        return t.statusSet && isSameDay(new Date(t.statusSet), today);
+      }
+    }
+    return false;
+  };
+
+  const todayTasks = filteredTasks.filter(t => isVisible(t) && t.dueDate && isSameDay(parseDueDate(t.dueDate), today));
+  const unscheduledTasks = filteredTasks.filter(t => isVisible(t) && !t.dueDate);
 
   return (
     <div className="px-8 py-10 md:px-14 max-w-4xl mx-auto pb-24">
@@ -41,6 +66,12 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
             tasks={todayTasks} 
             isToday 
             onToggle={(task) => updateTaskStatus({ id: task._id, status: "completed" })}
+            expandedTaskId={taskId}
+            onToggleExpand={(newId) => {
+              if (newId) searchParams.set("taskId", newId);
+              else searchParams.delete("taskId");
+              setSearchParams(searchParams);
+            }}
           />
         </section>
         
@@ -54,6 +85,12 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
             <TaskGroupedList 
               tasks={unscheduledTasks} 
               onToggle={(task) => updateTaskStatus({ id: task._id, status: "completed" })}
+              expandedTaskId={taskId}
+              onToggleExpand={(newId) => {
+                if (newId) searchParams.set("taskId", newId);
+                else searchParams.delete("taskId");
+                setSearchParams(searchParams);
+              }}
             />
           </section>
         )}

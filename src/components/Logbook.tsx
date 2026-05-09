@@ -13,7 +13,7 @@ export default function Logbook({
   hideHeader?: boolean;
 }) {
   const currentUser = useQuery(api.users.getCurrentUser);
-  const tasks = (useQuery(api.tasks.getTasks) || []) as any[];
+  const tasks = (useQuery(api.tasks.getTasks, {}) || []) as any[];
   const updateTaskStatus = useMutation(api.tasks.updateTaskStatus);
 
   if (!currentUser) return null;
@@ -125,6 +125,7 @@ export default function Logbook({
                     id={task._id}
                     title={task.title}
                     description={task.description}
+                    checklist={task.checklist}
                     completed={true}
                     ownerId={task.ownerId}
                     assigneeId={task.assigneeId}

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, X, CheckCircle2, Circle } from "lucide-react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import { parseDueDate } from "../lib/dateUtils";
+import { parseDueDate, toDateKey } from "../lib/dateUtils";
 
 /** Very simple fuzzy match: returns a score > 0 if all chars of query appear in order in target. */
 function fuzzyScore(query: string, target: string): number {
@@ -24,7 +25,9 @@ function fuzzyScore(query: string, target: string): number {
 export default function SearchBar() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const tasks = useQuery(api.tasks.getTasks) ?? [];
+  const tasks = useQuery(api.tasks.getTasks, {}) ?? [];
+  const updateStatus = useMutation(api.tasks.updateTaskStatus);
+  const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -52,6 +55,23 @@ export default function SearchBar() {
   const handleClear = () => {
     setQuery("");
     inputRef.current?.focus();
+  };
+
+  const handleToggleStatus = async (e: React.MouseEvent, task: any) => {
+    e.stopPropagation();
+    const newStatus = task.status === "completed" ? "active" : "completed";
+    await updateStatus({ id: task._id, status: newStatus });
+  };
+
+  const handleResultClick = (task: any) => {
+    setOpen(false);
+    setQuery("");
+    if (task.dueDate) {
+      const dateKey = toDateKey(parseDueDate(task.dueDate));
+      navigate(`/timeline?date=${dateKey}&taskId=${task._id}`);
+    } else {
+      navigate(`/unscheduled?taskId=${task._id}`);
+    }
   };
 
   return (
@@ -106,13 +126,19 @@ export default function SearchBar() {
               {results.map((task) => (
                 <li
                   key={task._id}
+                  onClick={() => handleResultClick(task)}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface-soft)] cursor-pointer transition-colors border-b border-[var(--color-hairline)] last:border-b-0 group"
                 >
-                  {task.status === "completed" ? (
-                    <CheckCircle2 size={17} className="text-[var(--color-primary)] shrink-0" />
-                  ) : (
-                    <Circle size={17} className="text-[var(--color-muted)] shrink-0" />
-                  )}
+                  <button
+                    onClick={(e) => handleToggleStatus(e, task)}
+                    className="shrink-0 focus:outline-none"
+                  >
+                    {task.status === "completed" ? (
+                      <CheckCircle2 size={17} className="text-[var(--color-primary)]" />
+                    ) : (
+                      <Circle size={17} className="text-[var(--color-muted)] group-hover:text-[var(--color-primary)] transition-colors" />
+                    )}
+                  </button>
                   <span
                     className={`text-[15px] flex-1 truncate ${
                       task.status === "completed"

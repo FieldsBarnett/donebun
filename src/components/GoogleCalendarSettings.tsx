@@ -2,17 +2,12 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { Calendar, ChevronDown, ExternalLink, RefreshCw, Trash2, UserCheck } from "lucide-react";
+import { Calendar, ChevronDown, ExternalLink, RefreshCw, UserCheck } from "lucide-react";
+import ColorPickerModal from "./ColorPickerModal";
 
-const PRESET_COLORS = [
-  '#007aff', // Blue
-  '#ff9500', // Orange
-  '#ff2d55', // Pink
-  '#af52de', // Violet
-  '#34c759', // Green
-  '#5ac8fa', // Sky
-  '#ffcc00', // Yellow
-];
+
+// We now use PRESET_COLORS from ColorPickerModal
+
 
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
@@ -41,7 +36,7 @@ export default function GoogleCalendarSettings() {
 
   const updateAssignee = useMutation(api.calendars.updateAssignee);
   const updateColor = useMutation(api.calendars.updateColor);
-  const deleteCalendar = useMutation(api.calendars.deleteCalendar);
+  const toggleSync = useMutation(api.calendars.toggleSync);
   const exchangeCode = useAction(api.googleActions.exchangeCode);
 
   const [isConnecting, setIsConnecting] = useState(false);
@@ -82,12 +77,11 @@ export default function GoogleCalendarSettings() {
     window.location.href = url + "&state=google-calendar";
   };
 
-  const handleDeleteCalendar = async (calendarId: Id<"calendars">) => {
-    if (!confirm("Remove this calendar sync? This won't delete any Google Calendar data.")) return;
+  const handleToggleSync = async (calendarId: Id<"calendars">, enabled: boolean) => {
     try {
-      await deleteCalendar({ calendarId });
+      await toggleSync({ calendarId, enabled });
     } catch (err: any) {
-      setError(err.message ?? "Failed to remove calendar");
+      setError(err.message ?? "Failed to update sync status");
     }
   };
 
@@ -112,7 +106,7 @@ export default function GoogleCalendarSettings() {
   return (
     <div className="space-y-6">
       {/* Header + Connect Button */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className="text-xl font-semibold">Google Calendar Sync</h3>
           <p className="text-sm text-[var(--color-muted)] mt-1">
@@ -122,14 +116,14 @@ export default function GoogleCalendarSettings() {
         <button
           onClick={handleConnectGoogle}
           disabled={isConnecting}
-          className="flex items-center gap-2 bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#005bb5] transition-colors disabled:opacity-60"
+          className="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#005bb5] transition-all active:scale-[0.98] disabled:opacity-60 w-full md:w-auto shrink-0"
         >
           {isConnecting ? (
-            <RefreshCw size={16} className="animate-spin" />
+            <RefreshCw size={18} className="animate-spin shrink-0" />
           ) : (
-            <Calendar size={16} />
+            <Calendar size={18} className="shrink-0" />
           )}
-          {isConnecting ? "Connecting…" : "Connect Google Account"}
+          <span>{isConnecting ? "Connecting…" : "Connect Google Account"}</span>
         </button>
       </div>
 
@@ -188,7 +182,7 @@ export default function GoogleCalendarSettings() {
               return (
                 <div
                   key={cal?._id}
-                  className={`flex items-center gap-3 p-3 bg-white transition-colors ${isOwner ? 'hover:bg-[var(--color-surface-soft)]' : 'opacity-80'}`}
+                  className={`flex items-center gap-3 p-3 bg-white transition-all ${isOwner ? 'hover:bg-[var(--color-surface-soft)]' : 'opacity-80'} ${cal.syncEnabled === false ? 'grayscale-[0.5] opacity-60' : ''}`}
                 >
                   <div className="relative">
                     <Calendar size={16} className={`${isOwner ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted)]'} shrink-0`} />
@@ -205,14 +199,12 @@ export default function GoogleCalendarSettings() {
                     </p>
                   </div>
 
-                  {/* Color picker */}
+                  {/* Color picker trigger */}
                   <div className="relative">
                     <button
                       onClick={() =>
                         isOwner
-                          ? setColorPickerOpen(
-                              colorPickerOpen === cal?._id ? null : cal?._id ?? null
-                            )
+                          ? setColorPickerOpen(cal?._id ?? null)
                           : undefined
                       }
                       className={`w-6 h-6 rounded-full border shadow-sm transition-transform hover:scale-110 active:scale-95 ${
@@ -221,22 +213,8 @@ export default function GoogleCalendarSettings() {
                       style={{ backgroundColor: cal?.color ?? "var(--color-badge-blue)" }}
                       title={isOwner ? "Change calendar color" : "Calendar color"}
                     />
-
-                    {colorPickerOpen === cal?._id && (
-                      <div className="absolute right-0 top-full mt-1 bg-white border border-[var(--color-hairline)] rounded-lg shadow-lg z-50 p-2 grid grid-cols-4 gap-1.5">
-                        {PRESET_COLORS.map((c) => (
-                          <button
-                            key={c}
-                            onClick={() => handleColorChange(cal!._id, c)}
-                            className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 ${
-                              cal?.color === c ? "border-black" : "border-transparent"
-                            }`}
-                            style={{ backgroundColor: c }}
-                          />
-                        ))}
-                      </div>
-                    )}
                   </div>
+
 
                   {/* Assignee selector */}
                   <div className="relative">
@@ -281,15 +259,20 @@ export default function GoogleCalendarSettings() {
                     )}
                   </div>
 
-                  {/* Delete — only for owner */}
+                  {/* Sync Toggle — only for owner */}
                   {isOwner && (
-                    <button
-                      onClick={() => handleDeleteCalendar(cal!._id)}
-                      className="p-1.5 text-[var(--color-muted)] hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                      title="Remove calendar sync"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-2 pl-2 border-l border-[var(--color-hairline)]">
+                      <input
+                        type="checkbox"
+                        id={`sync-${cal._id}`}
+                        checked={cal.syncEnabled !== false}
+                        onChange={(e) => handleToggleSync(cal._id, e.target.checked)}
+                        className="w-4 h-4 rounded border-[var(--color-hairline)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                      />
+                      <label htmlFor={`sync-${cal._id}`} className="text-[10px] font-bold uppercase tracking-tight text-[var(--color-muted)] cursor-pointer select-none">
+                        Sync
+                      </label>
+                    </div>
                   )}
                 </div>
               );
@@ -323,6 +306,18 @@ export default function GoogleCalendarSettings() {
           </a>
         </div>
       </details>
+
+      <ColorPickerModal
+        isOpen={colorPickerOpen !== null}
+        onClose={() => setColorPickerOpen(null)}
+        selectedColor={(calendars ?? []).find(c => c?._id === colorPickerOpen)?.color}
+        onSelect={(color) => {
+          if (colorPickerOpen) {
+            handleColorChange(colorPickerOpen as Id<"calendars">, color);
+          }
+        }}
+        title="Calendar Color"
+      />
     </div>
   );
 }

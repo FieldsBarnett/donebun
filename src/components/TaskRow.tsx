@@ -1,23 +1,98 @@
-import { useState, useRef, useEffect } from "react";
-import { Check, Users, Calendar, ChevronRight, ChevronLeft, X, Eye, EyeOff, FileText } from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { Check, Users, Calendar, ChevronRight, X, Eye, EyeOff, FileText, ListTodo, Trash2, Paperclip } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { parseDueDate, isSameDay } from "../lib/dateUtils";
+import { parseDueDate, isSameDay, toDateKey } from "../lib/dateUtils";
 import { motion, AnimatePresence } from "framer-motion";
 import CategorySelector from "./CategorySelector";
+import Modal from "./Modal";
+import ImagePreviewModal from "./ImagePreviewModal";
+import DatePicker from "./DatePicker";
+import { RecurrenceRule } from "./RecurrencePickerModal";
+import PickerWrapper from "./PickerWrapper";
 
 import RecurrenceEditModal, { UpdateMode } from "./RecurrenceEditModal";
+
+interface Attachment {
+  storageId: string;
+  name: string;
+  type: string;
+}
+
+const AttachmentItem = ({ file, onRemove, onOpen }: { file: Attachment; onRemove?: () => void; onOpen?: () => void }) => {
+  const url = useQuery(api.files.getUrl, file.storageId ? { storageId: file.storageId } : "skip");
+  const isImage = file.type.startsWith('image/');
+  
+  // Create a consistent "random" tilt based on the storageId
+  const tilt = useMemo(() => {
+    const seed = file.storageId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return (seed % 6) - 3; // -3 to +3 degrees
+  }, [file.storageId]);
+
+  if (isImage) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onOpen?.(); }}
+        className="w-14 h-14 rounded-lg border border-[var(--color-hairline)] overflow-hidden bg-white shrink-0 hover:border-[var(--color-primary)] transition-all shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
+        style={{ transform: `rotate(${tilt}deg)` }}
+      >
+        {url ? (
+          <img src={url} alt={file.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-black/5 animate-pulse" />
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <div 
+      className="flex items-center gap-2 px-2 py-1 bg-[var(--color-surface-soft)] border border-[var(--color-hairline)] rounded-lg text-xs group shadow-sm"
+      style={{ transform: `rotate(${tilt}deg)` }}
+    >
+      {url ? (
+        <a 
+          href={url} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="flex items-center gap-2 hover:text-[var(--color-primary)] transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <FileText size={12} />
+          <span className="max-w-[120px] truncate">{file.name}</span>
+        </a>
+      ) : (
+        <div className="flex items-center gap-2 text-[var(--color-muted)]">
+          <FileText size={12} />
+          <span className="max-w-[120px] truncate">{file.name}</span>
+        </div>
+      )}
+      {onRemove && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="p-0.5 hover:bg-black/5 rounded text-[var(--color-muted)] hover:text-red-500 ml-1"
+        >
+          <Trash2 size={12} />
+        </button>
+      )}
+    </div>
+  );
+};
 
 interface TaskRowProps {
   id: string; // Changed from Id<"tasks"> to string for local support
   title: string;
   description?: string;
+  checklist?: { text: string; completed: boolean }[];
+  attachments?: Attachment[];
   completed: boolean;
   ownerId: Id<"users">;
   assigneeId?: Id<"users">;
   categoryId?: Id<"categories">;
   dueDate?: string;
+  recurrence?: RecurrenceRule | null;
 
   isPrivate: boolean;
   isRecurring?: boolean;
@@ -32,8 +107,8 @@ interface TaskRowProps {
 
 
 export function TaskRow({
-  id, title: initialTitle, description: initialDescription, completed,
-  ownerId, assigneeId, categoryId, dueDate,
+  id, title: initialTitle, description: initialDescription, checklist: initialChecklist, attachments: initialAttachments, completed,
+  ownerId, assigneeId, categoryId, dueDate, recurrence: initialRecurrence,
   onToggle, isToday, isPrivate, isRecurring, recurrenceStrategy,
   onSaveLocal, onRemoveLocal,
   isExpanded: controlledIsExpanded,
@@ -41,7 +116,12 @@ export function TaskRow({
 }: TaskRowProps) {
   const [localTitle, setLocalTitle] = useState(initialTitle);
   const [localDescription, setLocalDescription] = useState(initialDescription || "");
+  const [localChecklist, setLocalChecklist] = useState<{text: string, completed: boolean}[]>(initialChecklist || []);
+  const [localAttachments, setLocalAttachments] = useState<Attachment[]>(initialAttachments || []);
+  const [previewImage, setPreviewImage] = useState<{file: Attachment, index: number} | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [localDueDate, setLocalDueDate] = useState(dueDate);
+  const [localRecurrence, setLocalRecurrence] = useState<RecurrenceRule | null>(initialRecurrence || null);
   const [localAssigneeId, setLocalAssigneeId] = useState(assigneeId);
   const [localCategoryId, setLocalCategoryId] = useState(categoryId);
   const [localIsPrivate, setLocalIsPrivate] = useState(isPrivate);
@@ -49,6 +129,9 @@ export function TaskRow({
 
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const pendingUpdatesRef = useRef<any>(null);
+
+  const checklistRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isExpanded = controlledIsExpanded !== undefined ? controlledIsExpanded : internalIsExpanded;
 
@@ -69,10 +152,11 @@ export function TaskRow({
   // Picker States
   const [showWhenPicker, setShowWhenPicker] = useState(false);
   const [showWhoPicker, setShowWhoPicker] = useState(false);
-  const [viewDate, setViewDate] = useState(new Date());
-  const [selectedTime, setSelectedTime] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const updateTask = useMutation(api.tasks.updateTask);
+  const deleteTask = useMutation(api.tasks.deleteTask);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const currentUser = useQuery(api.users.getCurrentUser);
   const familyMembers = useQuery(api.users.getMyFamilyMembers) || [];
 
@@ -88,12 +172,15 @@ export function TaskRow({
     if (!isExpanded) {
       setLocalTitle(initialTitle);
       setLocalDescription(initialDescription || "");
+      setLocalChecklist(initialChecklist || []);
+      setLocalAttachments(initialAttachments || []);
       setLocalDueDate(dueDate);
+      setLocalRecurrence(initialRecurrence || null);
       setLocalAssigneeId(assigneeId);
       setLocalCategoryId(categoryId);
       setLocalIsPrivate(isPrivate);
     }
-  }, [initialTitle, initialDescription, dueDate, assigneeId, categoryId, isPrivate, isExpanded]);
+  }, [initialTitle, initialDescription, initialChecklist, initialAttachments, dueDate, initialRecurrence, assigneeId, categoryId, isPrivate, isExpanded]);
 
   const handleUpdate = async (updates: any) => {
     try {
@@ -103,20 +190,40 @@ export function TaskRow({
     }
   };
 
+  const handleSelectDate = (date: Date | null) => {
+    if (date) {
+      setLocalDueDate(toDateKey(date));
+    } else {
+      setLocalDueDate(undefined);
+    }
+  };
+
   const handleSave = async () => {
+    const finalChecklist = localChecklist.filter(item => item.text.trim() !== "");
     const updates = {
       title: localTitle,
       description: localDescription,
-      dueDate: localDueDate ?? null,
+      checklist: finalChecklist.length > 0 ? finalChecklist : undefined,
+      attachments: localAttachments.length > 0 ? localAttachments : undefined,
+      dueDate: (localDueDate && localDueDate !== "") ? localDueDate : null,
+      recurrence: localRecurrence ?? null,
       assigneeId: localAssigneeId ?? null,
       categoryId: localCategoryId ?? null,
       isPrivate: localIsPrivate
     };
 
+    const initialChecklistFiltered = (initialChecklist || []).filter(item => item.text.trim() !== "");
+    const checklistChanged = JSON.stringify(finalChecklist) !== JSON.stringify(initialChecklistFiltered);
+    const attachmentsChanged = JSON.stringify(localAttachments) !== JSON.stringify(initialAttachments || []);
+    const recurrenceChanged = JSON.stringify(localRecurrence) !== JSON.stringify(initialRecurrence || null);
+
     const hasChanges = 
       localTitle !== initialTitle || 
       localDescription !== (initialDescription || "") || 
+      checklistChanged ||
+      attachmentsChanged ||
       localDueDate !== dueDate || 
+      recurrenceChanged ||
       localAssigneeId !== assigneeId || 
       localCategoryId !== categoryId || 
       localIsPrivate !== isPrivate;
@@ -139,6 +246,37 @@ export function TaskRow({
     performSave(updates);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const postUrl = await generateUploadUrl();
+      const result = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const { storageId } = await result.json();
+      
+      setLocalAttachments(prev => [...prev, {
+        storageId,
+        name: file.name,
+        type: file.type,
+      }]);
+    } catch (error) {
+      console.error("Upload failed:", error);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setLocalAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const performSave = (updates: any, updateMode: UpdateMode = "single") => {
     if (onSaveLocal) {
       onSaveLocal({ ...updates, updateMode });
@@ -158,12 +296,44 @@ export function TaskRow({
     handleUpdate({ ...updates, updateMode }); // fire-and-forget
   };
 
+  const handleDelete = async () => {
+    try {
+      if (onRemoveLocal) {
+        onRemoveLocal();
+      } else {
+        await deleteTask({ id: id as Id<"tasks"> });
+      }
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error("Failed to delete task:", error);
+    }
+  };
+
   // Use a ref to keep the latest handleSave available to the click-outside listener
   // without having to re-bind the event listener on every keystroke.
   const saveRef = useRef(handleSave);
   useEffect(() => {
     saveRef.current = handleSave;
   }, [handleSave]);
+
+  useEffect(() => {
+    if (isExpanded) {
+      // Small delay for motion layout to settle
+      const timer = setTimeout(() => {
+        titleRef.current?.focus();
+        // Move cursor to end of text
+        if (titleRef.current) {
+          const length = titleRef.current.value.length;
+          titleRef.current.setSelectionRange(length, length);
+        }
+        // Scroll into view if it was expanded via props (e.g. from search)
+        if (controlledIsExpanded) {
+          containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isExpanded, controlledIsExpanded]);
 
   // Click outside listener
   useEffect(() => {
@@ -210,48 +380,31 @@ export function TaskRow({
     return base;
   };
 
-  // Calendar Helpers
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const days = [];
-    for (let i = 0; i < firstDay.getDay(); i++) days.push(null);
-    for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i));
-    return days;
+  const handleChecklistKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const newChecklist = [...localChecklist];
+      newChecklist.splice(index + 1, 0, { text: '', completed: false });
+      setLocalChecklist(newChecklist);
+      setTimeout(() => checklistRefs.current[index + 1]?.focus(), 0);
+    } else if (e.key === 'Backspace' && localChecklist[index].text === '') {
+      e.preventDefault();
+      const newChecklist = [...localChecklist];
+      newChecklist.splice(index, 1);
+      setLocalChecklist(newChecklist);
+      if (index > 0) {
+        setTimeout(() => checklistRefs.current[index - 1]?.focus(), 0);
+      }
+    }
   };
 
-  const handleSelectDate = (date: Date | null, time?: string) => {
-    if (!date) {
-      setLocalDueDate(undefined);
-      setSelectedTime("");
-      setShowWhenPicker(false);
-      return;
-    }
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    const finalTime = time !== undefined ? time : selectedTime;
-    if (finalTime) {
-      setLocalDueDate(`${dateStr}T${finalTime}:00`);
+  const startChecklist = () => {
+    if (localChecklist.length === 0 || localChecklist[localChecklist.length - 1].text.trim() !== '') {
+      setLocalChecklist([...localChecklist, { text: '', completed: false }]);
+      setTimeout(() => checklistRefs.current[localChecklist.length]?.focus(), 0);
     } else {
-      setLocalDueDate(dateStr);
+      checklistRefs.current[localChecklist.length - 1]?.focus();
     }
-    setShowWhenPicker(false);
-  };
-
-  const PickerWrapper = ({ isOpen, onClose, children, className }: { isOpen: boolean; onClose: () => void; children: React.ReactNode; className: string }) => {
-    if (!isOpen) return null;
-    return (
-      <>
-        <div className="fixed inset-0 z-[205] cursor-default" onClick={(e) => { e.stopPropagation(); onClose(); }} />
-        <div className={className} onClick={(e) => e.stopPropagation()}>
-          {children}
-        </div>
-      </>
-    );
   };
 
 
@@ -297,6 +450,10 @@ export function TaskRow({
 
                 {initialDescription && (
                   <FileText size={14} className="text-[var(--color-muted)]/50 shrink-0" />
+                )}
+
+                {(initialAttachments && initialAttachments.length > 0) && (
+                  <Paperclip size={14} className="text-[var(--color-muted)]/50 shrink-0" />
                 )}
 
                 <div className="">
@@ -368,107 +525,88 @@ export function TaskRow({
                     className="w-full min-h-[80px] text-[15px] text-[var(--color-ink)] outline-none placeholder-[var(--color-muted)]/40 resize-none bg-transparent leading-relaxed"
                   />
 
-                  {/* Metadata Row */}
-                  <div className="flex items-center justify-end gap-2 mt-2">
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowWhenPicker(!showWhenPicker); }}
-                        className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${localDueDate ? 'bg-[var(--color-yellow)]/10 border-[var(--color-yellow)] text-[#b38f00]' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
-                        title={formatDateLabel(localDueDate)}
-                      >
-                        <Calendar size={14} />
-                      </button>
-                      <PickerWrapper 
-                        isOpen={showWhenPicker} 
-                        onClose={() => setShowWhenPicker(false)} 
-                        className="fixed md:absolute top-1/2 -translate-y-1/2 md:top-full md:translate-y-0 right-4 left-4 md:right-0 md:left-auto md:translate-x-0 w-auto md:w-[280px] bg-white border border-[var(--color-hairline)] rounded-xl shadow-2xl z-[210] p-4 animate-modal-in overflow-hidden"
-                      >
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">When</span>
-                          <button onClick={() => setShowWhenPicker(false)} className="p-1 hover:bg-black/5 rounded-full transition-colors md:hidden">
-                            <X size={16} />
+                  {localChecklist.length > 0 && (
+                    <div className="flex flex-col gap-1.5 mt-2 mb-2">
+                      {localChecklist.map((item, i) => (
+                        <div key={i} className="flex items-center gap-2 group">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newChecklist = [...localChecklist];
+                              newChecklist[i].completed = !newChecklist[i].completed;
+                              setLocalChecklist(newChecklist);
+                            }}
+                            className={`flex-shrink-0 flex items-center justify-center rounded border transition-colors w-4 h-4 ${
+                              item.completed 
+                                ? 'bg-[var(--color-primary)] border-[var(--color-primary)]' 
+                                : 'border-[#c7c7cc] hover:bg-[var(--color-primary)]/10'
+                            }`}
+                          >
+                            {item.completed && <Check size={10} className="text-white" strokeWidth={3} />}
+                          </button>
+                          <input
+                            ref={(el) => { checklistRefs.current[i] = el; }}
+                            type="text"
+                            value={item.text}
+                            onChange={(e) => {
+                              const newChecklist = [...localChecklist];
+                              newChecklist[i].text = e.target.value;
+                              setLocalChecklist(newChecklist);
+                            }}
+                            onKeyDown={(e) => handleChecklistKeyDown(e, i)}
+                            placeholder="New Item"
+                            className={`flex-1 text-[14px] outline-none bg-transparent ${
+                              item.completed ? 'text-[var(--color-muted)] line-through' : 'text-[var(--color-ink)]'
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newChecklist = [...localChecklist];
+                              newChecklist.splice(i, 1);
+                              setLocalChecklist(newChecklist);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-muted)] hover:text-red-500 transition-opacity"
+                          >
+                            <X size={14} />
                           </button>
                         </div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-bold">{viewDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
-                          <div className="flex gap-1">
-                            <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} className="p-1 hover:bg-black/5 rounded-md"><ChevronLeft size={16} /></button>
-                            <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))} className="p-1 hover:bg-black/5 rounded-md"><ChevronRight size={16} /></button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 mb-4">
-                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} className="text-[10px] font-bold text-[var(--color-muted)] text-center">{d}</div>)}
-                          {getDaysInMonth(viewDate).map((date, i) => (
-                            <button key={i} disabled={!date} onClick={() => date && handleSelectDate(date)} className={`text-xs h-8 w-8 flex items-center justify-center rounded-lg ${!date ? 'invisible' : 'hover:bg-[var(--color-primary)]/10'} ${date && isSameDay(date, new Date()) ? 'font-bold text-[var(--color-primary)]' : ''} ${date && localDueDate && isSameDay(parseDueDate(localDueDate), date) ? 'bg-[var(--color-primary)] text-white font-bold' : ''}`}>{date?.getDate()}</button>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => handleSelectDate(new Date())} className="flex-1 p-2 bg-[var(--color-yellow)]/10 text-[var(--color-yellow)] font-bold text-xs rounded-lg border border-[var(--color-yellow)]/20">Today</button>
-                          <button onClick={() => { const t = new Date(); t.setDate(t.getDate() + 1); handleSelectDate(t); }} className="flex-1 p-2 bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold text-xs rounded-lg border border-[var(--color-primary)]/20">Tomorrow</button>
-                        </div>
-                      </PickerWrapper>
+                      ))}
                     </div>
+                  )}
 
-                    {currentUser?._id === ownerId && (
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setLocalIsPrivate(!localIsPrivate); }}
-                          className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${localIsPrivate ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
-                          title={localIsPrivate ? "Make Public" : "Make Private"}
-                        >
-                          {localIsPrivate ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowWhoPicker(!showWhoPicker); }}
-                        className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${localAssigneeId ? 'border-transparent' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
-                        title={getAssigneeName()}
-                        style={localAssigneeId && assignee ? {
-                          backgroundColor: assignee.colorCode?.startsWith('#') ? assignee.colorCode : `var(--color-${assignee.colorCode || 'primary'})`
-                        } : {}}
-                      >
-                        {localAssigneeId && assignee ? (
-                          <span className="text-[10px] font-bold text-white uppercase">{assignee.initials || assignee.name[0]}</span>
-                        ) : (
-                          <Users size={14} />
-                        )}
-                      </button>
-                      <PickerWrapper 
-                        isOpen={showWhoPicker} 
-                        onClose={() => setShowWhoPicker(false)} 
-                        className="fixed md:absolute top-1/2 -translate-y-1/2 md:top-full md:translate-y-0 right-4 left-4 md:right-0 md:left-auto md:translate-x-0 w-auto md:w-56 bg-white border border-[var(--color-hairline)] rounded-xl shadow-xl z-[210] p-1 animate-modal-in"
-                      >
-                        <div className="flex items-center justify-between p-2 border-b border-[var(--color-hairline)] mb-1">
-                          <span className="text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">Assignee</span>
-                          <button onClick={() => setShowWhoPicker(false)} className="p-1 hover:bg-black/5 rounded-full transition-colors md:hidden">
-                            <X size={16} />
-                          </button>
+                  {localAttachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-4 mb-2">
+                      {localAttachments.map((file, i) => (
+                        <AttachmentItem 
+                          key={i} 
+                          file={file} 
+                          onRemove={() => removeAttachment(i)} 
+                          onOpen={() => setPreviewImage({ file, index: i })}
+                        />
+                      ))}
+                      {isUploading && (
+                        <div className="flex items-center gap-2 px-2 py-1 bg-[var(--color-surface-soft)] border border-dashed border-[var(--color-hairline)] rounded-lg text-xs italic text-[var(--color-muted)]">
+                          <div className="w-3 h-3 border-2 border-[var(--color-muted)]/30 border-t-[var(--color-muted)] rounded-full animate-spin" />
+                          Uploading...
                         </div>
-                        <button onClick={() => { setLocalAssigneeId(undefined); setShowWhoPicker(false); }} className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-black/5 rounded-lg transition-colors">
-                          <div className="flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-[var(--color-surface-soft)] flex items-center justify-center"><Users size={12} /></div>Family Pool</div>
-                          {!localAssigneeId && <Check size={14} className="text-[var(--color-primary)]" />}
-                        </button>
-                        {familyMembers.map(m => (
-                          <button key={m._id} onClick={() => { setLocalAssigneeId(m._id); setShowWhoPicker(false); }} className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-black/5 rounded-lg transition-colors text-left">
-                            <div className="flex items-center gap-2 overflow-hidden"><div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 aspect-square overflow-hidden" style={{ backgroundColor: m.colorCode || 'var(--color-primary)' }}>{m.initials || m.name[0]}</div><span className="truncate">{m.name}</span></div>
-                            {localAssigneeId === m._id && <Check size={14} className="text-[var(--color-primary)] shrink-0" />}
-                          </button>
-                        ))}
-                      </PickerWrapper>
+                      )}
                     </div>
+                  )}
 
-                    <CategorySelector
-                      selectedCategoryId={localCategoryId}
-                      onSelect={(catId) => setLocalCategoryId(catId || undefined)}
-                      className="shrink-0"
-                    />
-                  </div>
+                  <ImagePreviewModal 
+                    file={previewImage?.file || null}
+                    isOpen={!!previewImage}
+                    onClose={() => setPreviewImage(null)}
+                    onRemove={() => {
+                      if (previewImage) {
+                        removeAttachment(previewImage.index);
+                        setPreviewImage(null);
+                      }
+                    }}
+                  />
                 </div>
               </div>
 
@@ -478,23 +616,162 @@ export function TaskRow({
               </div>
             </div>
 
+            {/* Metadata Row */}
+            <div className="flex items-center justify-between mt-4">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+                className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)] transition-colors"
+                title="Delete Task"
+              >
+                <Trash2 size={14} />
+              </button>
+
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                    disabled={isUploading}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${localAttachments.length > 0 ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
+                    title="Attach File"
+                  >
+                    {isUploading ? (
+                      <div className="w-3 h-3 border-2 border-[var(--color-primary)]/30 border-t-[var(--color-primary)] rounded-full animate-spin" />
+                    ) : (
+                      <Paperclip size={14} />
+                    )}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); startChecklist(); }}
+                    className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)] transition-colors"
+                    title="Add Checklist"
+                  >
+                    <ListTodo size={14} />
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowWhenPicker(!showWhenPicker); }}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${localDueDate ? 'bg-[var(--color-yellow)]/10 border-[var(--color-yellow)] text-[#b38f00]' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
+                    title={formatDateLabel(localDueDate)}
+                  >
+                    <Calendar size={14} />
+                  </button>
+                  <DatePicker
+                    isOpen={showWhenPicker}
+                    onClose={() => setShowWhenPicker(false)}
+                    value={localDueDate || ""}
+                    onChange={setLocalDueDate}
+                    recurrence={localRecurrence}
+                    onRecurrenceChange={setLocalRecurrence}
+                  />
+                </div>
+
+                {currentUser?._id === ownerId && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setLocalIsPrivate(!localIsPrivate); }}
+                      className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${localIsPrivate ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
+                      title={localIsPrivate ? "Make Public" : "Make Private"}
+                    >
+                      {localIsPrivate ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                )}
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowWhoPicker(!showWhoPicker); }}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${localAssigneeId ? 'border-transparent' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
+                    title={getAssigneeName()}
+                    style={localAssigneeId && assignee ? {
+                      backgroundColor: assignee.colorCode?.startsWith('#') ? assignee.colorCode : `var(--color-${assignee.colorCode || 'primary'})`
+                    } : {}}
+                  >
+                    {localAssigneeId && assignee ? (
+                      <span className="text-[10px] font-bold text-white uppercase">{assignee.initials || assignee.name[0]}</span>
+                    ) : (
+                      <Users size={14} />
+                    )}
+                  </button>
+                  <PickerWrapper 
+                    isOpen={showWhoPicker} 
+                    onClose={() => setShowWhoPicker(false)} 
+                    className="fixed md:absolute top-1/2 -translate-y-1/2 md:top-full md:translate-y-0 right-4 left-4 md:right-0 md:left-auto md:translate-x-0 w-auto md:w-56 bg-white border border-[var(--color-hairline)] rounded-xl shadow-xl z-[210] p-1 animate-modal-in"
+                  >
+                    <div className="flex items-center justify-between p-2 border-b border-[var(--color-hairline)] mb-1">
+                      <span className="text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">Assignee</span>
+                      <button onClick={() => setShowWhoPicker(false)} className="p-1 hover:bg-black/5 rounded-full transition-colors md:hidden">
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <button onClick={() => { setLocalAssigneeId(undefined); setShowWhoPicker(false); }} className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-black/5 rounded-lg transition-colors">
+                      <div className="flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-[var(--color-surface-soft)] flex items-center justify-center"><Users size={12} /></div>Family Pool</div>
+                      {!localAssigneeId && <Check size={14} className="text-[var(--color-primary)]" />}
+                    </button>
+                    {familyMembers.map(m => (
+                      <button key={m._id} onClick={() => { setLocalAssigneeId(m._id); setShowWhoPicker(false); }} className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-black/5 rounded-lg transition-colors text-left">
+                        <div className="flex items-center gap-2 overflow-hidden"><div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 aspect-square overflow-hidden" style={{ backgroundColor: m.colorCode || 'var(--color-primary)' }}>{m.initials || m.name[0]}</div><span className="truncate">{m.name}</span></div>
+                        {localAssigneeId === m._id && <Check size={14} className="text-[var(--color-primary)] shrink-0" />}
+                      </button>
+                    ))}
+                  </PickerWrapper>
+                </div>
+
+                <CategorySelector
+                  selectedCategoryId={localCategoryId}
+                  onSelect={(catId) => setLocalCategoryId(catId || undefined)}
+                  className="shrink-0"
+                />
+              </div>
+            </div>
+
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="flex items-center justify-end pt-5 mt-2 border-t border-[var(--color-hairline)] pb-1"
+              className="flex items-center justify-between pt-5 mt-6 border-t border-[var(--color-hairline)] pb-1"
             >
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleSelectDate(new Date()); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-yellow)]/10 hover:bg-[var(--color-yellow)]/20 border border-[var(--color-yellow)]/20 rounded-full transition-all text-[var(--color-yellow)]"
+                >
+                  <Calendar size={14} />
+                  <span className="text-xs font-bold">Today</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    handleSelectDate(tomorrow);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-primary)]/10 hover:bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/20 rounded-full transition-all text-[var(--color-primary)]"
+                >
+                  <ChevronRight size={14} />
+                  <span className="text-xs font-bold">Tomorrow</span>
+                </button>
+              </div>
 
-              <div className="flex items-center gap-3 ml-auto">
-                {onRemoveLocal && (
-                  <button 
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onRemoveLocal(); }}
-                    className="px-4 py-2 rounded-full text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
-                  >
-                    Discard
-                  </button>
-                )}
+              <div className="flex items-center gap-3">
                 <button type="button" onClick={(e) => { e.stopPropagation(); handleSave(); }} className="bg-[var(--color-primary)] text-white px-6 py-2 rounded-full text-sm font-semibold hover:bg-[#006ee6] transition-all">Save</button>
               </div>
             </motion.div>
@@ -509,6 +786,27 @@ export function TaskRow({
         actionType="edit"
         strategy={recurrenceStrategy}
       />
+
+      <Modal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)}>
+        <div className="bg-white rounded-2xl p-6 shadow-xl border border-[var(--color-hairline)] max-w-sm mx-auto">
+          <h3 className="text-lg font-bold mb-2">Delete Task?</h3>
+          <p className="text-[var(--color-muted)] text-sm mb-6">Are you sure you want to delete this task? This action cannot be undone.</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="flex-1 px-4 py-2 rounded-xl border border-[var(--color-hairline)] text-sm font-semibold hover:bg-black/5 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex-1 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

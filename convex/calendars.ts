@@ -1,3 +1,4 @@
+// Force re-sync for performance optimization
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
@@ -32,7 +33,54 @@ export const upsertCalendar = internalMutation({
       ownerId: args.ownerId,
       familyId: args.familyId,
       assigneeId: args.assigneeId,
+      syncEnabled: true,
     });
+  },
+});
+
+// Toggle sync for a calendar — only the owner can do this
+export const toggleSync = mutation({
+  args: {
+    calendarId: v.id("calendars"),
+    enabled: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.subject)
+      )
+      .unique();
+
+    const calendar = await ctx.db.get(args.calendarId);
+    if (!calendar) throw new Error("Calendar not found");
+
+    if (calendar.ownerId !== user?._id) {
+      throw new Error("Only the owner can toggle sync for this calendar");
+    }
+
+    if (!args.enabled) {
+      // Deleting events for this calendar
+      const events = await ctx.db
+        .query("calendarEvents")
+        .withIndex("by_calendar", (q) => q.eq("calendarId", args.calendarId))
+        .collect();
+      
+      for (const event of events) {
+        await ctx.db.delete(event._id);
+      }
+
+      // Clear sync token so we can do a full re-sync if enabled again
+      await ctx.db.patch(args.calendarId, { 
+        syncEnabled: false,
+        syncToken: undefined 
+      });
+    } else {
+      await ctx.db.patch(args.calendarId, { syncEnabled: true });
+    }
   },
 });
 
@@ -208,14 +256,20 @@ export const getEventsByCalendar = query({
 export const getAllCalendars = internalQuery({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("calendars").collect();
+    return await ctx.db
+      .query("calendars")
+      .collect()
+      .then(calendars => calendars.filter(c => c.syncEnabled !== false));
   },
 });
 
-// Get all persisted events for all calendars in a family
+// Get all persisted events for all calendars in a family within an optional date range
 export const getEventsByFamily = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    start: v.optional(v.string()), // ISO string
+    end: v.optional(v.string()),   // ISO string
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
@@ -229,24 +283,29 @@ export const getEventsByFamily = query({
     const calendars = await ctx.db
       .query("calendars")
       .withIndex("by_family", (q) => q.eq("familyId", user.familyId!))
-      .collect();
+      .collect()
+      .then(cals => cals.filter(c => c.syncEnabled !== false));
 
-    const allEvents = [];
-    for (const cal of calendars) {
+    const eventPromises = calendars.map(async (cal) => {
       const events = await ctx.db
         .query("calendarEvents")
         .withIndex("by_calendar", (q) => q.eq("calendarId", cal._id))
         .collect();
       
-      for (const event of events) {
-        allEvents.push({
+      return events
+        .filter(event => {
+          if (args.start && event.start < args.start) return false;
+          if (args.end && event.start > args.end) return false;
+          return true;
+        })
+        .map(event => ({
           ...event,
           assigneeId: cal.assigneeId,
           color: cal.color,
-        });
-      }
-    }
+        }));
+    });
 
-    return allEvents;
+    const results = await Promise.all(eventPromises);
+    return results.flat();
   },
 });

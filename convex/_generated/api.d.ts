@@ -13,6 +13,7 @@ import type * as calendars from "../calendars.js";
 import type * as categories from "../categories.js";
 import type * as crons from "../crons.js";
 import type * as families from "../families.js";
+import type * as files from "../files.js";
 import type * as google from "../google.js";
 import type * as googleActions from "../googleActions.js";
 import type * as http from "../http.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   categories: typeof categories;
   crons: typeof crons;
   families: typeof families;
+  files: typeof files;
   google: typeof google;
   googleActions: typeof googleActions;
   http: typeof http;

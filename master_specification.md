@@ -7,7 +7,7 @@
 A robust, beautifully designed task management application inspired by **Things 3**, but supercharged with **multi-user family collaboration**. The app allows individuals to manage their personal tasks with the same elegance as Things 3, while seamlessly collaborating with family members on shared responsibilities.
 
 ## 2. Technology Stack
-*   **Frontend**: React, Tailwind CSS, TanStack Query (for data fetching/caching). The UI will utilize a **customizable Tailwind theme** driven by **design tokens** (CSS variables) to ensure easy global customization, consistent theming, and simple layout adjustments. The entire architecture and design must be **MOBILE FIRST**.
+*   **Frontend**: React, Tailwind CSS, TanStack Query (for local state and non-Convex APIs). The UI will utilize a **customizable Tailwind theme** driven by **design tokens** (CSS variables) to ensure easy global customization, consistent theming, and simple layout adjustments. The entire architecture and design must be **MOBILE FIRST**.
 *   **Native Apps (macOS & iOS)**: Tauri 2.0 (Targeting iOS as the primary platform first, scaling up to macOS).
 *   **Backend & Real-time Database**: Convex
 *   **Authentication**: Better Auth (with Convex integration)
@@ -50,12 +50,25 @@ The application will replicate the core organizational structure and elegant UX 
     *   **Information Density & Indicators**:
         *   **Details Indicator**: Tasks with an existing description feature a subtle, colored vertical bar on the left side of the row in the collapsed view, signaling that additional information is available inside.
         *   **Privacy Indicator**: Private tasks are marked with a small lock icon 🔒 next to their title in the collapsed view.
+        *   **Attachment Indicator**: Tasks with associated files feature a small paperclip icon in the collapsed view.
+    *   **Task Attachments & Storage**:
+        *   **Functionality**: Users can attach images and documents to any task via a paperclip icon in the metadata bar. 
+        *   **Visual Previews**: Images are displayed as clean, square thumbnails without filenames or inline metadata in the list views. Clicking an image thumbnail opens a dedicated **Image Preview Modal**, which displays the full-sized image and provides centralized controls for **downloading** and **permanently deleting** the file. Non-image attachments (documents, etc.) continue to display their filename and a direct delete button in the list.
+        *   **Backend Architecture**: Uses Convex Storage. The database stores a `storageId`, original `name`, and MIME `type`.
+        *   **Persistence in Recurrence**: Attachments are automatically copied to new instances when a recurring series materializes a virtual task or spawns a completion-based child task.
+    *   **Hard Deletion & Storage Cleanup**:
+        *   **Hard Delete Policy**: The app uses a hard-delete model. Deleting a task permanently removes it from the database (`ctx.db.delete`) to keep the workspace lean.
+        *   **Automated Storage Cleanup**: To save costs and space, deleting a task also triggers the permanent removal of all its associated files from Convex storage. 
+        *   **Deduplication Safeguard**: In recurring series, the system only deletes a file from storage if it is not used by other tasks in the series (e.g., the root task), ensuring shared resources are preserved.
+        *   **Update-Time Cleanup**: When a user removes an individual attachment from an existing task and saves, the system automatically identifies the removed file and deletes it from Convex storage.
     *   **Repeating Tasks**: Robust, backend-driven recurring schedules using two distinct architectures to ensure data integrity and prevent "ghosting":
-        *   **Fixed Schedule (iCal / RFC-5545 Inspired)**: Repeats on a set cadence (e.g., pay bills every month).
+        *   **Scheduled (iCal / RFC-5545 Inspired)**: Repeats on a set cadence regardless of completion (e.g., pay bills every month).
+            *   *Input Settings*: Supports Frequency (Daily, Weekly, Monthly, Yearly), Interval (e.g., every 2 weeks), specific Days of Week (for Weekly), Day of Month (for Monthly), and an optional End Date.
             *   *Architecture*: Uses a "Virtual Expansion" model. The database holds a single "Root" task. The `getTasks` query dynamically calculates and injects future virtual occurrences into the result set for a 3-month lookahead window.
             *   *Edge Cases & Mutations*: To prevent moved tasks from reappearing in their original slots ("ghosting"), materialized exceptions store an `originalDueDate` field. Deleting a virtual occurrence adds that date to an `excludedDates` array on the root task, keeping the database free of tombstone records.
             *   *Series Splitting*: Editing "This and following occurrences" sets an `endDate` on the old root and spawns a new root from that date forward, preserving history.
-        *   **Completion-Based (The "Chain" Model)**: Next instance triggers only based on when the previous one was actually marked completed.
+        *   **After Completion (The "Chain" Model)**: Next instance triggers only based on when the previous one was actually marked completed.
+            *   *Input Settings*: Supports Frequency (Daily, Weekly, Monthly, Yearly) and Interval (e.g., 3 days after completion). Complex rules like specific days of the week are omitted to ensure the chain remains purely relative to completion time.
             *   *Architecture*: Uses a "Materialized Chain" model. Only one active task exists in the database for the series at a time. When marked completed, the backend instantly calculates the next date and spawns a new task pointing to the parent.
             *   *Edge Cases & UX*: Editing an active completion-based task applies the edits to the active task directly; when completed, those edits naturally carry forward to the next link. To prevent duplicates, if a user un-completes a task, the backend automatically hunts down and removes the previously spawned child task. Deleting a completion-based task offers a "Skip to next" option, which deletes the active task but spawns the next one to keep the chain alive.
             *   *Centralization*: All complex recurrence logic, date calculations, and chain-spawning rules are strictly centralized on the backend (`convex/recurrence.ts`) to ensure atomic, transactional data integrity regardless of frontend state or connection drops.
@@ -90,7 +103,11 @@ A powerful, family-aware calendar sync feature allows users to view their schedu
     *   **Incremental Sync**: Uses Google API `syncToken` logic to only download changed events after the initial import.
     *   **Sync Window**: The initial sync imports events from 1 month in the past to 1 year in the future.
     *   **Background Updates**: Syncs are triggered automatically when a user views their calendar and via scheduled Convex Crons (every 15 minutes).
+    *   **Windowed Queries**: Frontend views request events only within a specific temporal window (e.g., -2 months to +1 year) to optimize network transfer and UI performance.
 *   **Filter-Aware Visibility**: Calendar events seamlessly respect the app's global persistent filtering (detailed below).
+*   **Sync Toggles**: Instead of deleting a calendar import to remove it from view, users can uncheck a "Sync" toggle in the settings.
+    *   **Behavior**: Disabling sync immediately removes all cached events for that calendar from the local database and prevents background syncs for it. 
+    *   **Re-activation**: Re-enabling sync triggers a fresh full import to restore the calendar's events.
 
 ## 6. Settings & Navigation
 The settings interface is designed for ultra-minimalist intentionality and a premium "native" feel, inspired by the Things 3 iOS application.
@@ -107,6 +124,11 @@ The settings interface is designed for ultra-minimalist intentionality and a pre
 *   **Settings Areas**:
     *   **Account & Family**: Unified view for profile management, signing out, family workspace creation, member lists, and invite link sharing.
     *   **Calendar Sync**: Focused view for managing Google Calendar integrations and account syncing status.
+    *   **Preferences**: User-specific behavior settings.
+        *   **Logbook Movement**: Users can choose when completed tasks are moved out of the main view and into the Logbook:
+            *   **Immediately**: Tasks disappear from the Dashboard/Unscheduled view as soon as they are checked.
+            *   **The Next Day (Default)**: Tasks completed today remain visible in their original place with a checkmark until the end of the day, providing immediate visual feedback of progress.
+        *   **Historical Timeline**: Completed tasks from the past are always visible in the Timeline and Calendar views to maintain a continuous record of activity, regardless of the Logbook movement setting.
 
 ## 7. Advanced Persistent Filtering
 To handle the mix of personal and family tasks (and calendar events) without clutter, the UI will feature an **always-visible, easy-to-toggle filter bar/menu**. This ensures users can instantly pivot their view across all lists (Dashboard, Timeline, specific Categories, etc.).
@@ -127,6 +149,7 @@ The Quick Entry interface is designed for maximum speed and frictionless data en
     *   **Title**: Primary input with 2xl bold typography.
     *   **Description**: Multi-line textarea for notes and links. Any URLs entered here are **automatically linkified** (rendered as clickable, `target="_blank"` links) in all task list views.
     *   **Metadata Row**: A dedicated row for high-level selectors, right-aligned for easy reach:
+        *   **Attachment**: A paperclip icon to trigger file uploads, supporting images and documents.
         *   **When (Date/Time)**: A comprehensive picker including a calendar grid and time entry. 
             *   *Quick Selects*: Large, high-priority buttons at the bottom of the picker for "Today" and "Tomorrow" (each taking half the picker's width).
         *   **Who (Assignee)**: Allows assigning the task to a specific family member or the "Family" pool.
@@ -162,6 +185,7 @@ Each task in the returned array has:
 {
   "title": "Concise task title",
   "details": "Any notes, context, or extra details (optional)",
+  "checklist": ["String array of checklist items (optional)"],
   "assigneeName": "Spoken assignee name, or null if none mentioned"
 }
 ```
@@ -198,3 +222,16 @@ Two additional AI-powered buttons appear at the bottom of the modal:
 6.  **Multiplayer & Filtering**: Introduce Family sharing, assignments, family color coding, and the persistent filter toggle state.
 7.  **Calendar Integration**: Implement Google Calendar OAuth, background syncing, and Calendar management view.
 8.  **Polish**: Animations, native macOS/iOS feel via Tauri.
+ng**: Introduce Family sharing, assignments, family color coding, and the persistent filter toggle state.
+7.  **Calendar Integration**: Implement Google Calendar OAuth, background syncing, and Calendar management view.
+8.  **Polish**: Animations, native macOS/iOS feel via Tauri.
+
+## 11. Performance Optimization
+To maintain the app's "Things 3" snappiness as the dataset grows over months and years, the architecture follows several key performance patterns:
+
+*   **Windowed Fetching**: Primary views (Timeline, Calendar, Dashboard) do not fetch the entire database history. They request data within a specific "window" (e.g., Timeline fetches -2 months to +12 months; Dashboard fetches only Today + Unscheduled). This is enforced by passing optional `start` and `end` ISO strings to the Convex queries.
+*   **Optimized Indexing**:
+    *   **Tasks**: Uses a compound index `by_family_dueDate` (`familyId`, `dueDate`) to allow for O(log N) range queries within a specific household workspace.
+    *   **Calendar Events**: Uses a `by_start` index on the ISO start time for efficient date-range filtering.
+*   **Client-Side Memoization**: High-complexity data transformations—such as merging tasks and calendar events into a single "day map" for the Timeline—are wrapped in `useMemo`. This ensures that the UI only re-processes data when the query results actually change, preventing lag during component re-renders or navigation.
+*   **Real-time Reactivity**: All views leverage Convex subscriptions, ensuring that background updates (like Google Calendar syncs or task updates from other family members) are pushed to the client and rendered instantly without manual refreshes.

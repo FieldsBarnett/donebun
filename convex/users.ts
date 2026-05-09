@@ -46,6 +46,9 @@ export const store = mutation({
     await ctx.db.patch(userId, {
       familyId: familyId,
       colorCode: "blue", // Give them a default color
+      preferences: {
+        moveTasksToLogbook: "next_day",
+      },
     });
 
     return userId;
@@ -122,6 +125,36 @@ export const updateProfile = mutation({
     }
 
     await ctx.db.patch(user._id, patch);
+  },
+});
+
+export const updatePreferences = mutation({
+  args: {
+    moveTasksToLogbook: v.optional(v.union(v.literal("immediately"), v.literal("next_day"))),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.subject)
+      )
+      .unique();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const preferences: any = {
+      ...(user.preferences || {}),
+      ...(args.moveTasksToLogbook ? { moveTasksToLogbook: args.moveTasksToLogbook } : {}),
+    };
+
+    await ctx.db.patch(user._id, { preferences });
   },
 });
 

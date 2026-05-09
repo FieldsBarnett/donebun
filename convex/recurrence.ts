@@ -90,6 +90,8 @@ export async function materializeVirtualTask(
     recurrence: task.recurrence,
     familyId: task.familyId,
     isPrivate: updates.isPrivate !== undefined ? updates.isPrivate : task.isPrivate,
+    checklist: updates.checklist !== undefined ? updates.checklist : task.checklist,
+    attachments: updates.attachments !== undefined ? updates.attachments : task.attachments,
     parentTaskId: rootId,
   });
 }
@@ -122,6 +124,8 @@ export async function splitSeries(
     recurrence: updates.recurrence === null ? undefined : (updates.recurrence !== undefined ? updates.recurrence : rootTask.recurrence),
     familyId: rootTask.familyId,
     isPrivate: updates.isPrivate !== undefined ? updates.isPrivate : rootTask.isPrivate,
+    checklist: updates.checklist !== undefined ? updates.checklist : rootTask.checklist,
+    attachments: updates.attachments !== undefined ? updates.attachments : rootTask.attachments,
   });
 }
 
@@ -142,6 +146,8 @@ export async function spawnNextCompletionTask(ctx: MutationCtx, task: Doc<"tasks
       recurrence: task.recurrence,
       familyId: task.familyId,
       isPrivate: task.isPrivate,
+      checklist: task.checklist,
+      attachments: task.attachments,
       parentTaskId: task.parentTaskId || task._id,
     });
   }

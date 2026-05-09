@@ -6,21 +6,26 @@ interface Task {
   _id: any;
   title: string;
   description?: string;
+  checklist?: { text: string; completed: boolean }[];
+  attachments?: { storageId: string; name: string; type: string }[];
   status: "active" | "completed" | "deleted";
   dueDate?: string;
   ownerId: any;
   assigneeId?: any;
   categoryId?: any;
   isPrivate: boolean;
+  recurrence?: any;
 }
 
 interface TaskGroupedListProps {
   tasks: Task[];
   onToggle: (task: Task) => void;
   isToday?: boolean;
+  expandedTaskId?: string | null;
+  onToggleExpand?: (taskId: string | null) => void;
 }
 
-export function TaskGroupedList({ tasks, onToggle, isToday }: TaskGroupedListProps) {
+export function TaskGroupedList({ tasks, onToggle, isToday, expandedTaskId, onToggleExpand }: TaskGroupedListProps) {
   const categories = useQuery(api.categories.list) || [];
   if (tasks.length === 0) {
     return <p className="text-sm text-[var(--color-muted)] py-2 italic">No tasks.</p>;
@@ -75,16 +80,21 @@ export function TaskGroupedList({ tasks, onToggle, isToday }: TaskGroupedListPro
                   id={task._id}
                   title={task.title}
                   description={task.description}
+                  checklist={task.checklist}
+                  attachments={task.attachments}
                   completed={task.status === "completed"}
                   ownerId={task.ownerId}
                   assigneeId={task.assigneeId}
                   categoryId={task.categoryId}
                   dueDate={task.dueDate}
+                  recurrence={task.recurrence}
                   isPrivate={task.isPrivate}
                   isRecurring={(task as any).isRecurring}
                   recurrenceStrategy={(task as any).recurrence?.strategy}
                   onToggle={() => onToggle(task)}
                   isToday={isToday}
+                  isExpanded={expandedTaskId === task._id}
+                  onToggleExpand={() => onToggleExpand?.(expandedTaskId === task._id ? null : task._id)}
                 />
               ))}
             </div>

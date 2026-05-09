@@ -1,3 +1,4 @@
+// Recurring task expansion and performance-optimized fetching
 import { mutation, query } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
@@ -11,8 +12,11 @@ import {
 } from "./recurrence";
 
 export const getTasks = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    start: v.optional(v.string()), // ISO string
+    end: v.optional(v.string()),   // ISO string
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
@@ -24,25 +28,61 @@ export const getTasks = query({
     const familyId = user?.familyId;
     if (!familyId) return [];
 
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_family", (q) => q.eq("familyId", familyId))
-      .filter((q) => 
-        q.and(
-          q.neq(q.field("status"), "deleted"),
-          q.or(
-            q.eq(q.field("isPrivate"), false),
-            q.eq(q.field("ownerId"), user?._id),
-            q.eq(q.field("assigneeId"), user?._id)
-          )
-        )
-      )
-      .collect();
+    let tasks;
+    if (args.start || args.end) {
+      // Fetch scheduled tasks in range PLUS unscheduled tasks
+      // In Convex, range queries must be built in a single chain.
+      const scheduledInRange = await ctx.db
+        .query("tasks")
+        .withIndex("by_family_dueDate", (q) => {
+          const base = q.eq("familyId", familyId);
+          if (args.start && args.end) {
+            return base.gte("dueDate", args.start).lte("dueDate", args.end);
+          }
+          if (args.start) {
+            return base.gte("dueDate", args.start);
+          }
+          if (args.end) {
+            return base.lte("dueDate", args.end);
+          }
+          return base;
+        })
+        .collect();
+
+      // For unscheduled, we fetch where dueDate is undefined.
+      // We use the same index but eq to undefined.
+      const unscheduled = await ctx.db
+        .query("tasks")
+        .withIndex("by_family_dueDate", (q) => q.eq("familyId", familyId).eq("dueDate", undefined as any))
+        .collect();
+
+      tasks = [...scheduledInRange, ...unscheduled];
+    } else {
+      tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_family", (q) => q.eq("familyId", familyId))
+        .collect();
+    }
+
+    // Filter for privacy and deletion
+    tasks = tasks.filter((t) => 
+      t.status !== "deleted" &&
+      (!t.isPrivate || t.ownerId === user?._id || t.assigneeId === user?._id)
+    );
 
     const expandedTasks: any[] = [];
     const now = new Date();
-    const limitDate = new Date();
-    limitDate.setMonth(limitDate.getMonth() + 3); // 3 months look-ahead
+    
+    // Determine the limit for virtual expansion
+    let limitDate = new Date();
+    if (args.end) {
+      limitDate = new Date(args.end);
+    } else {
+      limitDate.setMonth(limitDate.getMonth() + 3); // Default 3 months look-ahead
+    }
+
+    // Expansion start date
+    const expansionStart = args.start ? new Date(args.start) : now;
 
     for (const task of tasks) {
       expandedTasks.push({
@@ -61,7 +101,7 @@ export const getTasks = query({
         const excludedDates = task.recurrence.excludedDates || [];
 
         while (true) {
-          const nextDateStr = calculateNextDueDate(currentDueDate, task.recurrence, now.toISOString());
+          const nextDateStr = calculateNextDueDate(currentDueDate, task.recurrence, expansionStart.toISOString());
           if (!nextDateStr) break;
           
           const nextDate = new Date(nextDateStr);
@@ -113,6 +153,15 @@ export const createTask = mutation({
       dayOfMonth: v.optional(v.number()),
       endDate: v.optional(v.string()),
     })),
+    checklist: v.optional(v.array(v.object({
+      text: v.string(),
+      completed: v.boolean(),
+    }))),
+    attachments: v.optional(v.array(v.object({
+      storageId: v.string(),
+      name: v.string(),
+      type: v.string(),
+    }))),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -136,6 +185,8 @@ export const createTask = mutation({
       dueDate: args.dueDate,
       isPrivate: args.isPrivate,
       recurrence: args.recurrence,
+      checklist: args.checklist,
+      attachments: args.attachments,
       status: "active",
       statusSet: Date.now(),
     });
@@ -203,6 +254,15 @@ export const updateTask = mutation({
       endDate: v.optional(v.string()),
       excludedDates: v.optional(v.array(v.string())),
     }), v.null())),
+    checklist: v.optional(v.array(v.object({
+      text: v.string(),
+      completed: v.boolean(),
+    }))),
+    attachments: v.optional(v.array(v.object({
+      storageId: v.string(),
+      name: v.string(),
+      type: v.string(),
+    }))),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -215,7 +275,8 @@ export const updateTask = mutation({
 
     if (!user) throw new Error("User not found");
 
-    const { id, updateMode = "single", ...updates } = args;
+    const { id, updateMode = "single", ...updatesObj } = args;
+    const updates: any = updatesObj;
 
     const isVirtual = id.includes(":");
     const taskId = isVirtual ? id.split(":")[0] : id;
@@ -247,6 +308,19 @@ export const updateTask = mutation({
         }
         if (updates.isPrivate !== undefined) patchData.isPrivate = updates.isPrivate;
         if (updates.recurrence !== undefined) patchData.recurrence = updates.recurrence === null ? undefined : updates.recurrence;
+        if (updates.checklist !== undefined) patchData.checklist = updates.checklist === null ? undefined : updates.checklist;
+        if (updates.attachments !== undefined) {
+          const oldAttachments = task.attachments || [];
+          const newAttachments = updates.attachments || [];
+          const removed = oldAttachments.filter(oa => !newAttachments.some((na: any) => na.storageId === oa.storageId));
+          for (const att of removed) {
+            const isUsedByRoot = rootTask.attachments?.some(ra => ra.storageId === att.storageId);
+            if (!isUsedByRoot || rootId === task._id) {
+              await ctx.storage.delete(att.storageId as any);
+            }
+          }
+          patchData.attachments = updates.attachments === null ? undefined : updates.attachments;
+        }
 
         await ctx.db.patch(task._id, patchData);
         return;
@@ -274,6 +348,16 @@ export const updateTask = mutation({
       }
       if (updates.recurrence !== undefined) patchData.recurrence = updates.recurrence === null ? undefined : updates.recurrence;
       if (updates.isPrivate !== undefined) patchData.isPrivate = updates.isPrivate;
+      if (updates.checklist !== undefined) patchData.checklist = updates.checklist === null ? undefined : updates.checklist;
+      if (updates.attachments !== undefined) {
+        const oldAttachments = rootTask.attachments || [];
+        const newAttachments = updates.attachments || [];
+        const removed = oldAttachments.filter(oa => !newAttachments.some((na: any) => na.storageId === oa.storageId));
+        for (const att of removed) {
+          await ctx.storage.delete(att.storageId as any);
+        }
+        patchData.attachments = updates.attachments === null ? undefined : updates.attachments;
+      }
 
       await ctx.db.patch(rootId, patchData);
       return;
@@ -306,10 +390,18 @@ export const deleteTask = mutation({
         return;
       }
       
-      await ctx.db.patch(task._id, { 
-        status: "deleted",
-        statusSet: Date.now(),
-      });
+      // Delete attachments from storage
+      const attachments = task.attachments || [];
+      for (const att of attachments) {
+        // Only delete from storage if this file isn't used by the root task 
+        // (to avoid breaking the series if they share files)
+        const isUsedByRoot = rootTask.attachments?.some(ra => ra.storageId === att.storageId);
+        if (!isUsedByRoot || rootId === task._id) {
+           await ctx.storage.delete(att.storageId as any);
+        }
+      }
+
+      await ctx.db.delete(task._id);
 
       if (task.recurrence?.strategy === "completion") {
          await spawnNextCompletionTask(ctx as any, task);
@@ -326,15 +418,36 @@ export const deleteTask = mutation({
            recurrence: { ...rootTask.recurrence, endDate: endDate.toISOString() }
          });
        }
-       // We don't spawn a new series for 'future' delete, we just end the old one.
        return;
     }
 
     if (updateMode === "all") {
-       await ctx.db.patch(rootId, { 
-         status: "deleted",
-         statusSet: Date.now(),
-       });
+       // Find all materialized instances to delete them too
+       const exceptions = await ctx.db
+         .query("tasks")
+         .withIndex("by_parent", (q) => q.eq("parentTaskId", rootId))
+         .collect();
+
+       for (const ex of exceptions) {
+         const atts = ex.attachments || [];
+         for (const att of atts) {
+           // We'll delete these storage files when we delete the root to be safe,
+           // but we can check if they are unique to the exception here.
+           const isUniqueToEx = !rootTask.attachments?.some(ra => ra.storageId === att.storageId);
+           if (isUniqueToEx) {
+             await ctx.storage.delete(att.storageId as any);
+           }
+         }
+         await ctx.db.delete(ex._id);
+       }
+
+       // Delete root task attachments
+       const rootAtts = rootTask.attachments || [];
+       for (const att of rootAtts) {
+         await ctx.storage.delete(att.storageId as any);
+       }
+
+       await ctx.db.delete(rootId);
        return;
     }
   },

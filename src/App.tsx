@@ -170,10 +170,10 @@ function Layout({
         {voiceRecording && (
           <button
             onClick={() => voiceEntryRef.current?.cancelRecording()}
-            className="w-10 h-10 rounded-full bg-white border border-[var(--color-hairline)] shadow-lg flex items-center justify-center text-red-500 hover:bg-red-50 transition-all animate-modal-in"
+            className="w-12 h-12 rounded-full bg-white border border-[var(--color-hairline)] shadow-lg flex items-center justify-center text-red-500 hover:bg-red-50 transition-all animate-modal-in z-10"
             aria-label="Cancel recording"
           >
-            <X size={20} />
+            <X size={22} />
           </button>
         )}
         {/* Voice mic button */}
@@ -189,11 +189,6 @@ function Layout({
               voiceEntryRef.current.stopRecording();
             }
           }}
-          onPointerLeave={() => {
-            if (voiceEntryRef.current?.isRecording) {
-              voiceEntryRef.current.stopRecording();
-            }
-          }}
           onContextMenu={(e) => e.preventDefault()}
           className={`relative w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 select-none touch-none ${
             voiceRecording
@@ -202,7 +197,7 @@ function Layout({
           }`}
           aria-label={voiceRecording ? 'Stop recording' : 'Start voice recording'}
         >
-          {voiceRecording && <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-50" />}
+          {voiceRecording && <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-50 pointer-events-none" />}
           <MicIcon size={22} className={voiceRecording ? 'text-white relative z-10' : 'text-[var(--color-muted)]'} />
         </button>
         {/* FAB */}

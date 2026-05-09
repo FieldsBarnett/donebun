@@ -29,6 +29,7 @@ interface ParsedTask {
   id: string;
   title: string;
   description: string | null;
+  checklist?: { text: string; completed: boolean }[];
   assigneeId: string | null;
   dueDate: string | null;
   categoryId: string | null;
@@ -174,6 +175,7 @@ function ReviewModal({
                   id={task.id}
                   title={task.title}
                   description={task.description ?? undefined}
+                  checklist={task.checklist ?? undefined}
                   completed={false}
                   ownerId={currentUserId as Id<"users">}
                   assigneeId={task.assigneeId ? (task.assigneeId as Id<"users">) : undefined}
@@ -300,7 +302,6 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
       setParsedTasks(null);
       setError(null);
       setRecording(false);
-      isCancellingRef.current = false;
     }
   }, [isOpen, setRecording]);
 
@@ -340,6 +341,8 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
   const cancelRecording = useCallback(() => {
     isCancellingRef.current = true;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      // Specifically clear onstop to prevent any race condition where stop() triggers it
+      mediaRecorderRef.current.onstop = null;
       mediaRecorderRef.current.stop();
     }
     mediaRecorderRef.current = null;
@@ -358,7 +361,7 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
   // ── Process Audio ───────────────────────────────────────────────────────────
 
   const processAudio = async (mimeType: string) => {
-    if (chunksRef.current.length === 0) return;
+    if (chunksRef.current.length === 0 || isCancellingRef.current) return;
     setIsTranscribing(true);
     try {
       const blob = new Blob(chunksRef.current, { type: mimeType });

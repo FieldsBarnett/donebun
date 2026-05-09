@@ -15,6 +15,7 @@ export default function TaskDetailsModal({ isOpen, onClose, taskTitle }: TaskDet
           <input 
             type="text" 
             defaultValue={taskTitle}
+            autoFocus
             className="text-lg font-semibold w-full outline-none bg-transparent"
           />
           <button onClick={onClose} className="p-1 hover:bg-black/5 rounded-full text-[var(--color-muted)]">

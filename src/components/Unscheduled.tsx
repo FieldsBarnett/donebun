@@ -1,17 +1,33 @@
 import { useQuery, useMutation } from "convex/react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { TaskGroupedList } from "./TaskGroupedList";
 import { Inbox } from "lucide-react";
+import { isSameDay } from "../lib/dateUtils";
 import { filterTasks, FilterMode } from "../lib/filterUtils";
 
 export default function Unscheduled({ filterMode }: { filterMode: FilterMode }) {
   const currentUser = useQuery(api.users.getCurrentUser);
-  const tasks = (useQuery(api.tasks.getTasks) || []) as any[];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const taskId = searchParams.get("taskId");
+  const tasks = (useQuery(api.tasks.getTasks, {}) || []) as any[];
   const updateTaskStatus = useMutation(api.tasks.updateTaskStatus);
 
+  const today = new Date();
+  const moveTasksPreference = currentUser?.preferences?.moveTasksToLogbook || "next_day";
+
+  const isVisible = (t: any) => {
+    if (t.status === "active") return true;
+    if (t.status === "completed") {
+      if (moveTasksPreference === "next_day") {
+        return t.statusSet && isSameDay(new Date(t.statusSet), today);
+      }
+    }
+    return false;
+  };
 
   const unscheduledTasks = filterTasks(tasks, currentUser, filterMode)
-    .filter(t => t.status === "active" && !t.dueDate);
+    .filter(t => isVisible(t) && !t.dueDate);
 
   return (
     <div className="px-8 py-10 md:px-14 max-w-4xl mx-auto pb-24">
@@ -29,6 +45,12 @@ export default function Unscheduled({ filterMode }: { filterMode: FilterMode }) 
       <TaskGroupedList 
         tasks={unscheduledTasks} 
         onToggle={(task) => updateTaskStatus({ id: task._id, status: "completed" })}
+        expandedTaskId={taskId}
+        onToggleExpand={(newId) => {
+          if (newId) searchParams.set("taskId", newId);
+          else searchParams.delete("taskId");
+          setSearchParams(searchParams);
+        }}
       />
     </div>
   );
