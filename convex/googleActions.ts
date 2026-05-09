@@ -105,13 +105,18 @@ export const exchangeCode = action({
     if (calListRes.ok) {
       const calListData: any = await calListRes.json();
       for (const cal of calListData.items ?? []) {
-        await ctx.runMutation(internal.calendars.upsertCalendar, {
+        const calendarId = await ctx.runMutation(internal.calendars.upsertCalendar, {
           googleAccountId: accountId,
           googleCalendarId: cal.id,
           name: cal.summary ?? cal.id,
           ownerId: user._id,
           familyId: user.familyId!,
           assigneeId: user._id,
+        });
+
+        // Trigger immediate sync for each newly imported calendar
+        await ctx.scheduler.runAfter(0, internal.googleActions.syncCalendar, {
+          calendarId,
         });
       }
     }

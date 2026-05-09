@@ -13,6 +13,7 @@ type Task = {
   title: string;
   description?: string;
   checklist?: { text: string; completed: boolean }[];
+  attachments?: { storageId: string; name: string; type: string }[];
   status: "active" | "completed";
   dueDate?: string;
   ownerId: string;
@@ -377,6 +378,7 @@ export default function Timeline({ filterMode }: { filterMode: FilterMode }) {
                                     title={item.task.title}
                                     description={item.task.description}
                                     checklist={item.task.checklist}
+                                    attachments={item.task.attachments}
                                     completed={item.task.status === "completed"}
                                     ownerId={item.task.ownerId as any}
                                     assigneeId={item.task.assigneeId as any}

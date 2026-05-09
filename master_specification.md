@@ -104,12 +104,12 @@ A powerful, family-aware calendar sync feature allows users to view their schedu
     *   **Persistence**: Google events are mirrored into a local `calendarEvents` table in Convex for instant UI responsiveness.
     *   **Incremental Sync**: Uses Google API `syncToken` logic to only download changed events after the initial import.
     *   **Sync Window**: The initial sync imports events from 1 month in the past to 1 year in the future.
-    *   **Background Updates**: Syncs are triggered automatically when a user views their calendar and via scheduled Convex Crons (every 15 minutes).
+    *   **Background & Immediate Updates**: Syncs are triggered automatically when a user views their calendar, via scheduled Convex Crons (every 15 minutes), and **immediately** upon connecting a new Google account or re-enabling a previously disabled calendar sync.
     *   **Windowed Queries**: Frontend views request events only within a specific temporal window (e.g., -2 months to +1 year) to optimize network transfer and UI performance.
 *   **Filter-Aware Visibility**: Calendar events seamlessly respect the app's global persistent filtering (detailed below).
 *   **Sync Toggles**: Instead of deleting a calendar import to remove it from view, users can uncheck a "Sync" toggle in the settings.
     *   **Behavior**: Disabling sync immediately removes all cached events for that calendar from the local database and prevents background syncs for it. 
-    *   **Re-activation**: Re-enabling sync triggers a fresh full import to restore the calendar's events.
+    *   **Re-activation**: Re-enabling sync immediately triggers a fresh full import to restore the calendar's events.
 
 ## 6. Settings & Navigation
 The settings interface is designed for ultra-minimalist intentionality and a premium "native" feel, inspired by the Things 3 iOS application.

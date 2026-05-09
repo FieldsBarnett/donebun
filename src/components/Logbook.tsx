@@ -126,6 +126,7 @@ export default function Logbook({
                     title={task.title}
                     description={task.description}
                     checklist={task.checklist}
+                    attachments={task.attachments}
                     completed={true}
                     ownerId={task.ownerId}
                     assigneeId={task.assigneeId}

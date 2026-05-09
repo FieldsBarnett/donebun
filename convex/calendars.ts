@@ -1,6 +1,7 @@
 // Force re-sync for performance optimization
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
 // Internal: save synced calendars from a Google account
 export const upsertCalendar = internalMutation({
@@ -80,6 +81,11 @@ export const toggleSync = mutation({
       });
     } else {
       await ctx.db.patch(args.calendarId, { syncEnabled: true });
+      
+      // Schedule immediate sync when re-enabled
+      await ctx.scheduler.runAfter(0, internal.googleActions.syncCalendar, {
+        calendarId: args.calendarId,
+      });
     }
   },
 });
