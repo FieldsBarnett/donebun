@@ -39,6 +39,7 @@ The application will replicate the core organizational structure and elegant UX 
     *   **Categories**: A single organizational unit instead of Areas, Projects, and Headings. When assigned a category, tasks are automatically grouped under a heading for that category in the list views. 
         *   **Family-Wide**: All categories are shared across the entire family workspace.
         *   **On-the-fly Creation**: Users can create new categories instantly through a "New Category" modal integrated into the category selector, which then automatically selects the new category for the current task.
+        *   **Things 3 Import**: During import, only **Areas** are converted into categories. Tasks belonging to an Area are assigned to the corresponding category; projects and headings are ignored during this mapping to maintain a flat, simple organizational structure.
 *   **Task Interactions**:
     *   **Quick Actions Menu**: A 3-dot context menu on tasks for fast management (Move to tomorrow, Change time, Delete, Repeat options).
 *   **Quick Entry (Global)**: A powerful, high-speed task creation interface accessible from anywhere in the app via a Floating Action Button (FAB) or the `n` keyboard shortcut. (See Section 8 for details).
@@ -70,6 +71,7 @@ The application will replicate the core organizational structure and elegant UX 
         *   **After Completion (The "Chain" Model)**: Next instance triggers only based on when the previous one was actually marked completed.
             *   *Input Settings*: Supports Frequency (Daily, Weekly, Monthly, Yearly) and Interval (e.g., 3 days after completion). Complex rules like specific days of the week are omitted to ensure the chain remains purely relative to completion time.
             *   *Architecture*: Uses a "Materialized Chain" model. Only one active task exists in the database for the series at a time. When marked completed, the backend instantly calculates the next date and spawns a new task pointing to the parent.
+            *   *Time Preservation*: When spawning a new task in the chain, the system preserves the specific time of day from the completed task. If the completed task was a date-only item (no time component), the next task will also be created as a date-only item, ensuring the "time of day" setting is durable throughout the chain's lifecycle.
             *   *Edge Cases & UX*: Editing an active completion-based task applies the edits to the active task directly; when completed, those edits naturally carry forward to the next link. To prevent duplicates, if a user un-completes a task, the backend automatically hunts down and removes the previously spawned child task. Deleting a completion-based task offers a "Skip to next" option, which deletes the active task but spawns the next one to keep the chain alive.
             *   *Centralization*: All complex recurrence logic, date calculations, and chain-spawning rules are strictly centralized on the backend (`convex/recurrence.ts`) to ensure atomic, transactional data integrity regardless of frontend state or connection drops.
 

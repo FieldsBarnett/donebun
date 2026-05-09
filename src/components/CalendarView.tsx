@@ -8,6 +8,8 @@ import { filterTasks, filterCalendarEvents, FilterMode } from "../lib/filterUtil
 
 type ViewMode = "week" | "month";
 
+const HOUR_HEIGHT = 44;
+
 export default function CalendarView({ filterMode }: { filterMode: FilterMode }) {
   const [view, setView] = useState<ViewMode>("month");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -154,15 +156,15 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
   return (
     <div className="flex flex-col h-full bg-[var(--color-canvas)] overflow-hidden">
       {/* Calendar Header / Controls */}
-      <div className="flex flex-wrap items-center justify-between p-4 md:px-8 gap-3 border-b border-[var(--color-hairline)] bg-white shrink-0">
+      <div className="flex flex-wrap items-center justify-between p-2.5 md:px-6 gap-2 border-b border-[var(--color-hairline)] bg-white shrink-0">
         <div className="flex items-center justify-between sm:justify-start gap-2 md:gap-4 overflow-hidden w-full sm:w-auto">
           <button
             onClick={handleToday}
-            className="px-3 md:px-4 py-1.5 text-sm font-medium border border-[var(--color-hairline)] rounded-md hover:bg-black/5 transition-colors shrink-0"
+            className="px-2.5 md:px-3 py-1 text-sm font-medium border border-[var(--color-hairline)] rounded-md hover:bg-black/5 transition-colors shrink-0"
           >
             Today
           </button>
-          <h2 className="text-lg md:text-xl font-medium tracking-tight truncate min-w-0 sm:ml-2">
+          <h2 className="text-base md:text-lg font-medium tracking-tight truncate min-w-0 sm:ml-2">
             {formatHeader()}
           </h2>
         </div>
@@ -170,13 +172,13 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
         <div className="flex bg-[var(--color-surface-soft)] p-1 rounded-lg border border-[var(--color-hairline)] shrink-0 mx-auto sm:mx-0">
           <button
             onClick={() => setView("week")}
-            className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${view === "week" ? "bg-white shadow-sm text-black" : "text-[var(--color-muted)] hover:text-black"}`}
+            className={`px-2.5 py-0.5 text-sm font-medium rounded-md transition-all ${view === "week" ? "bg-white shadow-sm text-black" : "text-[var(--color-muted)] hover:text-black"}`}
           >
             Week
           </button>
           <button
             onClick={() => setView("month")}
-            className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${view === "month" ? "bg-white shadow-sm text-black" : "text-[var(--color-muted)] hover:text-black"}`}
+            className={`px-2.5 py-0.5 text-sm font-medium rounded-md transition-all ${view === "month" ? "bg-white shadow-sm text-black" : "text-[var(--color-muted)] hover:text-black"}`}
           >
             Month
           </button>
@@ -192,7 +194,7 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
               {days.map((d) => (
                 <div
                   key={d}
-                  className="py-2 text-center text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]"
+                  className="py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]"
                 >
                   {d}
                 </div>
@@ -238,7 +240,7 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
                           </span>
                         )}
                       </div>
-                      <div className="flex-1 overflow-y-auto space-y-1 pr-1 pb-1 scrollbar-hide">
+                      <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 pb-1 scrollbar-hide">
                         {events.slice(0, 3).map((e) => (
                           <div
                             key={e._id}
@@ -255,19 +257,20 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
                           return (
                             <div
                               key={t._id}
-                              className="text-[10px] px-1.5 py-0.5 rounded text-white truncate shadow-sm flex items-center gap-1"
-                              style={{ 
-                                backgroundColor: color,
-                                opacity: t.status === 'completed' ? 0.6 : 1
-                              }}
+                              className="text-[9px] px-0.5 py-0.5 flex items-center gap-1.5 min-w-0"
+                              style={{ opacity: t.status === 'completed' ? 0.5 : 1 }}
                               title={t.title}
                             >
-                              {assignee?.initials ? (
-                                <span className="text-[7px] font-black bg-black/20 px-0.5 rounded-[2px] shrink-0 uppercase">{assignee.initials}</span>
-                              ) : (
-                                <Users size={8} className="shrink-0" />
-                              )}
-                              <span className="truncate">{t.title}</span>
+                              <div 
+                                className="w-1.5 h-1.5 rounded-full shrink-0 border-[1px]"
+                                style={{ 
+                                  borderColor: color, 
+                                  backgroundColor: t.status === 'completed' ? color : 'transparent' 
+                                }}
+                              />
+                              <span className={`truncate ${t.status === 'completed' ? 'line-through text-[var(--color-muted)]' : 'text-[var(--color-ink)]'}`}>
+                                {t.title}
+                              </span>
                             </div>
                           );
                         })}
@@ -306,13 +309,13 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
                       <div
                         key={i}
                         onClick={() => navigateToDay(date)}
-                        className="w-[120px] md:w-[150px] shrink-0 py-3 flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-[var(--color-primary)]/5 transition-colors"
+                        className="w-[120px] md:w-[150px] shrink-0 py-1.5 flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-[var(--color-primary)]/5 transition-colors"
                       >
-                        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">
                           {dName}
                         </span>
                         <span
-                          className={`text-xl font-medium mt-1 w-10 h-10 flex items-center justify-center rounded-full ${
+                          className={`text-sm font-medium mt-0.5 w-7 h-7 flex items-center justify-center rounded-full ${
                             isToday ? "bg-[var(--color-primary)] text-white" : "text-black"
                           }`}
                         >
@@ -329,7 +332,7 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
                 {/* Sticky Left Column (Hours) */}
                 <div className="w-16 shrink-0 flex flex-col border-r border-[var(--color-hairline)] bg-white sticky left-0 z-20">
                   {hours.map((h, i) => (
-                    <div key={h} className="h-14 relative flex justify-end pr-2 bg-white">
+                    <div key={h} className="relative flex justify-end pr-2 bg-white" style={{ height: `${HOUR_HEIGHT}px` }}>
                       <span className="text-[10px] text-[var(--color-muted)] absolute -top-2 bg-white px-1 leading-none z-10">
                         {i !== 0 ? h : ""}
                       </span>
@@ -342,22 +345,54 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
                   {/* Absolute horizontal lines spanning across all days */}
                   <div className="absolute inset-0 pointer-events-none flex flex-col divide-y divide-[var(--color-hairline)] z-0">
                     {hours.map((_, i) => (
-                      <div key={i} className="h-14 w-full" />
+                      <div key={i} className="w-full" style={{ height: `${HOUR_HEIGHT}px` }} />
                     ))}
                   </div>
 
                   {allDays.map((date, dayIdx) => {
                     const { events, tasks: dayTasks } = getItemsForDate(date);
+                    const untimedTasks = dayTasks.filter(t => !t.dueDate?.includes("T"));
+                    const timedTasks = dayTasks.filter(t => t.dueDate?.includes("T"));
+                    
+                    const untimedOffset = untimedTasks.length * 18; // Each untimed task takes approx 18px
 
                     return (
                       <div 
                         key={dayIdx} 
                         data-date={date.toDateString()}
-                        className="w-[120px] md:w-[150px] shrink-0 border-r border-[var(--color-hairline)] relative min-h-[1344px]"
+                        className="w-[120px] md:w-[150px] shrink-0 border-r border-[var(--color-hairline)] relative"
+                        style={{ minHeight: `${24 * HOUR_HEIGHT}px` }}
                       >
+                        {/* Untimed tasks at the top */}
+                        <div className="flex flex-col">
+                          {untimedTasks.map((t) => {
+                            const assignee = familyMembers.find(m => m._id === t.assigneeId);
+                            const color = assignee?.colorCode?.startsWith("#") ? assignee.colorCode : `var(--color-${assignee?.colorCode || 'badge-pink'})`;
+                            return (
+                              <div
+                                key={t._id}
+                                className="flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] leading-tight"
+                                style={{ height: "18px", opacity: t.status === 'completed' ? 0.5 : 1 }}
+                              >
+                                <div 
+                                  className="w-1.5 h-1.5 rounded-full shrink-0 border-[1px]"
+                                  style={{ 
+                                    borderColor: color, 
+                                    backgroundColor: t.status === 'completed' ? color : 'transparent' 
+                                  }}
+                                />
+                                <span className={`truncate ${t.status === 'completed' ? 'line-through text-[var(--color-muted)]' : 'text-[var(--color-ink)]'}`}>
+                                  {t.title}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Events and timed tasks shifted by the offset */}
                         {events.map((e) => {
                           const start = parseDueDate(e.start);
-                          const top = start.getHours() * 56 + (start.getMinutes() / 60) * 56;
+                          const top = untimedOffset + start.getHours() * HOUR_HEIGHT + (start.getMinutes() / 60) * HOUR_HEIGHT;
                           return (
                             <div
                               key={e._id}
@@ -373,30 +408,38 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
                             </div>
                           );
                         })}
-                        {dayTasks.map((t, idx) => {
+                        {timedTasks.map((t) => {
                           const assignee = familyMembers.find(m => m._id === t.assigneeId);
                           const color = assignee?.colorCode?.startsWith("#") ? assignee.colorCode : `var(--color-${assignee?.colorCode || 'badge-pink'})`;
-                          const top = 100 + idx * 50; // Simple stacking for tasks without times
+                          
+                          const d = parseDueDate(t.dueDate!);
+                          const top = untimedOffset + d.getHours() * HOUR_HEIGHT + (d.getMinutes() / 60) * HOUR_HEIGHT;
+
                           return (
                             <div
                               key={t._id}
-                              className="absolute left-1 right-1 rounded-md shadow-sm p-1.5 text-white overflow-hidden text-[10px] leading-tight z-10"
+                              className="absolute left-1 right-1 flex items-center gap-2 px-1.5 py-0 text-[11px] leading-tight z-10"
                               style={{ 
                                 top: `${top}px`, 
-                                height: "40px",
-                                backgroundColor: color,
-                                border: `1px solid rgba(0,0,0,0.1)`,
-                                opacity: t.status === 'completed' ? 0.6 : 1
+                                height: "24px",
+                                opacity: t.status === 'completed' ? 0.5 : 1,
                               }}
                             >
-                              <div className="flex items-center gap-1 mb-0.5">
-                                {assignee?.initials ? (
-                                  <span className="text-[8px] font-black bg-black/20 px-0.5 rounded-[2px] shrink-0 uppercase">{assignee.initials}</span>
-                                ) : (
-                                  <Users size={10} className="shrink-0" />
-                                )}
-                                <p className="font-bold truncate">{t.title}</p>
-                              </div>
+                              <div 
+                                className="w-2.5 h-2.5 rounded-full shrink-0 border-[1.5px]"
+                                style={{ 
+                                  borderColor: color,
+                                  backgroundColor: t.status === 'completed' ? color : 'transparent'
+                                }} 
+                              />
+                              <p className={`font-medium truncate flex-1 ${t.status === 'completed' ? 'line-through text-[var(--color-muted)]' : 'text-[var(--color-ink)]'}`}>
+                                {t.title}
+                              </p>
+                              {assignee?.initials && (
+                                <span className="text-[8px] font-bold text-[var(--color-muted)]/40 uppercase shrink-0">
+                                  {assignee.initials}
+                                </span>
+                              )}
                             </div>
                           );
                         })}

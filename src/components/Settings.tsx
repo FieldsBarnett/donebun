@@ -6,10 +6,11 @@ import FamilySettings from "./FamilySettings";
 import AccountSettings from "./AccountSettings";
 import GoogleCalendarSettings from "./GoogleCalendarSettings";
 import Logbook from "./Logbook";
-import { User, Users, Calendar, ChevronRight, ChevronLeft, BookOpen, Settings2, Check } from "lucide-react";
+import { User, Users, Calendar, ChevronRight, ChevronLeft, BookOpen, Settings2, Check, Database } from "lucide-react";
 import { FilterMode } from "../lib/filterUtils";
+import ImportData from "./ImportData";
 
-type SettingsView = "main" | "family" | "calendar" | "account" | "logbook" | "preferences";
+type SettingsView = "main" | "family" | "calendar" | "account" | "logbook" | "preferences" | "import";
 
 export default function Settings({ filterMode }: { filterMode: FilterMode }) {
   const [view, setView] = useState<SettingsView>(() => {
@@ -86,6 +87,11 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
                 icon={<BookOpen size={22} className="text-[#32ade6]" />}
                 title="Logbook"
                 onClick={() => setView("logbook")}
+              />
+              <SettingsGroup 
+                icon={<Database size={22} className="text-[#ff9500]" />}
+                title="Data & Import"
+                onClick={() => setView("import")}
               />
             </div>
           </motion.div>
@@ -230,6 +236,20 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
                 <Logbook filterMode={filterMode} hideHeader={true} />
               </div>
             </div>
+          </motion.div>
+        )}
+        {view === "import" && (
+          <motion.div
+            key="import"
+            custom={1}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute inset-0"
+          >
+            <ImportData onBack={() => setView("main")} />
           </motion.div>
         )}
       </AnimatePresence>

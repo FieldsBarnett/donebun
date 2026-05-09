@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { X, Calendar, ChevronRight, Check, User, Users, Eye, EyeOff, ListTodo, Paperclip, FileText, Trash2 } from "lucide-react";
+import { X, Calendar, ChevronRight, Check, User, Users, Eye, EyeOff, ListTodo, Paperclip, FileText, Trash2, Repeat } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { parseDueDate, isSameDay, toDateKey } from "../lib/dateUtils";
 import CategorySelector from "./CategorySelector";
@@ -436,11 +436,23 @@ export default function QuickEntry({ isOpen, onClose }: QuickEntryProps) {
             <div className="relative">
               <button
                 onClick={() => setShowWhenPicker(!showWhenPicker)}
-                className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${dueDate ? 'bg-[var(--color-yellow)]/10 border-[var(--color-yellow)] text-[#b38f00]' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
+                className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${
+                  recurrence 
+                    ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)]' 
+                    : dueDate 
+                      ? 'bg-[var(--color-yellow)]/10 border-[var(--color-yellow)] text-[#b38f00]' 
+                      : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'
+                }`}
                 title={formatDateLabel(dueDate)}
               >
                 <Calendar size={14} />
               </button>
+
+              {recurrence && (
+                <div className="absolute -top-1 -right-1 bg-[var(--color-primary)] text-white rounded-full p-0.5 border border-white pointer-events-none shadow-sm">
+                  <Repeat size={8} strokeWidth={3} />
+                </div>
+              )}
 
               <DatePicker
                 isOpen={showWhenPicker}

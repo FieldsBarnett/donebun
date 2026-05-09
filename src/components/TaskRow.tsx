@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { Check, Users, Calendar, ChevronRight, X, Eye, EyeOff, FileText, ListTodo, Trash2, Paperclip } from "lucide-react";
+import { Check, Users, Calendar, ChevronRight, X, Eye, EyeOff, FileText, ListTodo, Trash2, Paperclip, Repeat } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -665,11 +665,24 @@ export function TaskRow({
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setShowWhenPicker(!showWhenPicker); }}
-                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${localDueDate ? 'bg-[var(--color-yellow)]/10 border-[var(--color-yellow)] text-[#b38f00]' : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'}`}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors ${
+                      localRecurrence 
+                        ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)]' 
+                        : localDueDate 
+                          ? 'bg-[var(--color-yellow)]/10 border-[var(--color-yellow)] text-[#b38f00]' 
+                          : 'border-[var(--color-hairline)] text-[var(--color-muted)] hover:border-[var(--color-muted)]'
+                    }`}
                     title={formatDateLabel(localDueDate)}
                   >
                     <Calendar size={14} />
                   </button>
+
+                  {localRecurrence && (
+                    <div className="absolute -top-1 -right-1 bg-[var(--color-primary)] text-white rounded-full p-0.5 border border-white pointer-events-none shadow-sm">
+                      <Repeat size={8} strokeWidth={3} />
+                    </div>
+                  )}
+                  
                   <DatePicker
                     isOpen={showWhenPicker}
                     onClose={() => setShowWhenPicker(false)}

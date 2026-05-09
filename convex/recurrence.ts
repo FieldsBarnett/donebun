@@ -1,11 +1,46 @@
 import { MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 
-export function calculateNextDueDate(currentDueDate: string | undefined, recurrence: any, completionDate: string): string | null {
-  const referenceDateStr = recurrence.strategy === "fixed" && currentDueDate 
-    ? currentDueDate 
-    : completionDate;
+function toLocalISOString(date: Date, includeTime: boolean): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const datePart = `${year}-${month}-${day}`;
+  
+  if (!includeTime) return datePart;
+  
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${datePart}T${hours}:${minutes}:${seconds}`;
+}
 
+export function calculateNextDueDate(currentDueDate: string | undefined, recurrence: any, completionDate: string): string | null {
+  let referenceDateStr = completionDate;
+  let originalHasTime = true;
+
+  if (recurrence.strategy === "fixed" && currentDueDate) {
+    referenceDateStr = currentDueDate;
+    originalHasTime = currentDueDate.includes("T");
+  } else if (recurrence.strategy === "completion") {
+    // For completion strategy, we use completionDate but try to preserve the time from currentDueDate
+    if (currentDueDate) {
+      originalHasTime = currentDueDate.includes("T");
+      if (originalHasTime) {
+        const timePart = currentDueDate.split("T")[1];
+        const datePart = completionDate.split("T")[0];
+        referenceDateStr = `${datePart}T${timePart}`;
+      } else {
+        referenceDateStr = completionDate.split("T")[0];
+      }
+    } else {
+      // No currentDueDate, default to completionDate (which has time)
+      originalHasTime = true;
+    }
+  }
+
+  // Parse carefully: if it has no 'T', it's YYYY-MM-DD, treat as local midnight
+  // If it has 'T', it might or might not have 'Z'. new Date() handles 'Z' as UTC, and no 'Z' as LOCAL.
   const nextDate = new Date(referenceDateStr);
 
   switch (recurrence.frequency) {
@@ -47,7 +82,7 @@ export function calculateNextDueDate(currentDueDate: string | undefined, recurre
     return null;
   }
 
-  return nextDate.toISOString();
+  return toLocalISOString(nextDate, originalHasTime);
 }
 
 export async function excludeVirtualDate(ctx: MutationCtx, rootId: Id<"tasks">, virtualDate: string) {
@@ -107,7 +142,7 @@ export async function splitSeries(
     const endDate = new Date(splitDate);
     endDate.setDate(endDate.getDate() - 1);
     await ctx.db.patch(rootTask._id, {
-      recurrence: { ...rootTask.recurrence, endDate: endDate.toISOString() }
+      recurrence: { ...rootTask.recurrence, endDate: toLocalISOString(endDate, splitDate.includes("T")) }
     });
   }
 
@@ -132,7 +167,8 @@ export async function splitSeries(
 export async function spawnNextCompletionTask(ctx: MutationCtx, task: Doc<"tasks">) {
   if (task.recurrence?.strategy !== "completion") return null;
   
-  const nextDueDate = calculateNextDueDate(task.dueDate, task.recurrence, new Date().toISOString());
+  const now = new Date();
+  const nextDueDate = calculateNextDueDate(task.dueDate, task.recurrence, toLocalISOString(now, true));
   if (nextDueDate) {
     return await ctx.db.insert("tasks", {
       title: task.title,
