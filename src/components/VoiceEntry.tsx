@@ -7,6 +7,7 @@ import {
   useImperativeHandle,
 } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import {
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import { TaskRow } from "./TaskRow";
+import { parseDueDate, toDateKey } from "../lib/dateUtils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -245,6 +247,7 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
   { isOpen, onClose, onRecordingChange },
   ref
 ) {
+  const navigate = useNavigate();
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
@@ -418,6 +421,17 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
       );
       setParsedTasks(null);
       onClose();
+
+      // Navigate based on the first task saved
+      if (tasksToSave.length > 0) {
+        const firstTask = tasksToSave[0];
+        if (firstTask.dueDate) {
+          const dateKey = toDateKey(parseDueDate(firstTask.dueDate));
+          navigate(`/timeline?date=${dateKey}`);
+        } else {
+          navigate("/unscheduled");
+        }
+      }
     } catch (err: unknown) {
       setError(`Failed to save: ${err instanceof Error ? err.message : "Unknown error"}`);
     }

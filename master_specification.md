@@ -30,6 +30,9 @@ The application will replicate the core organizational structure and elegant UX 
         *   **Calendar events** are visually distinct from tasks (calendar icon instead of a checkbox, color-coded by assignee).
         *   Supports **deep linking** to a specific date via the `?date=YYYY-MM-DD` query parameter, which scrolls the view to that day and highlights it.
     *   **Calendar View**: A dedicated, full-screen calendar interface (**Week and Month views only** — no Day view) similar to Google Calendar, plotting both tasks and synced events. Clicking any day in the calendar navigates to that day in the **Timeline** (deep link via `?date=YYYY-MM-DD`).
+        *   **Month View**: Features a **continuous vertical scroll** (spanning 3 months past to 6 months future) instead of traditional pagination. The start of each month is visually indicated with a stronger left border on the 1st day.
+        *   **Week View**: Features a **continuous horizontal scroll** across the same date range. Day headers (`sticky` at the top) and the time indicator column (`sticky` on the left) remain locked in view while scrolling the main grid.
+        *   **Dynamic Navigation**: The header dynamically updates to display the month/year currently in view as the user scrolls. Loading the view or clicking the "Today" button instantly snaps the scroll position to the current day.
     *   **Unscheduled**: The master list of tasks that can be done whenever, without a specific date.
     *   **Logbook**: A history of completed tasks.
 *   **Organization**:

@@ -3,7 +3,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { X, Calendar, ChevronRight, Check, User, Users, ChevronLeft, Clock, Eye, EyeOff } from "lucide-react";
-import { parseDueDate, isSameDay } from "../lib/dateUtils";
+import { useNavigate } from "react-router-dom";
+import { parseDueDate, isSameDay, toDateKey } from "../lib/dateUtils";
 import CategorySelector from "./CategorySelector";
 import Modal from "./Modal";
 
@@ -25,6 +26,7 @@ const PickerWrapper = ({ isOpen, onClose, children, className }: { isOpen: boole
 };
 
 export default function QuickEntry({ isOpen, onClose }: QuickEntryProps) {
+  const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState<string>(""); // ISO string or YYYY-MM-DD
@@ -79,6 +81,14 @@ export default function QuickEntry({ isOpen, onClose }: QuickEntryProps) {
       // Reset assignee to current user for next time
       if (currentUser) setAssigneeId(currentUser._id);
       onClose();
+
+      // Navigate to the appropriate view
+      if (dueDate) {
+        const dateKey = toDateKey(parseDueDate(dueDate));
+        navigate(`/timeline?date=${dateKey}`);
+      } else {
+        navigate("/unscheduled");
+      }
     } catch (error) {
       console.error("Failed to create task:", error);
     } finally {
