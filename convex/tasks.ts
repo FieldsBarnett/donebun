@@ -180,6 +180,14 @@ export const createTask = mutation({
     const familyId = user?.familyId;
     if (!user || !familyId) throw new Error("User or family not found");
 
+    // Auto-acknowledge: if the creator is assigning to themselves (or no one),
+    // pre-fill lastNotifiedAssigneeId so no popup fires for their own tasks.
+    const effectiveAssigneeId = args.assigneeId;
+    const lastNotifiedAssigneeId =
+      !effectiveAssigneeId || effectiveAssigneeId === user._id
+        ? user._id
+        : undefined;
+
     return await ctx.db.insert("tasks", {
       title: args.title,
       description: args.description,
@@ -194,6 +202,7 @@ export const createTask = mutation({
       attachments: args.attachments,
       status: "active",
       statusSet: Date.now(),
+      lastNotifiedAssigneeId,
     });
   },
 });
@@ -464,6 +473,68 @@ export const deleteTask = mutation({
 
        await ctx.db.delete(rootId);
        return;
+    }
+  },
+});
+
+/**
+ * Returns tasks assigned to the current user that they haven't been
+ * notified about yet (lastNotifiedAssigneeId !== assigneeId).
+ * Only returns active tasks.
+ */
+export const getUnseenAssignments = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier)
+      )
+      .unique();
+
+    if (!user) return [];
+
+    const assigned = await ctx.db
+      .query("tasks")
+      .withIndex("by_assignee", (q) => q.eq("assigneeId", user._id))
+      .collect();
+
+    return assigned.filter(
+      (t) =>
+        t.status === "active" &&
+        t.lastNotifiedAssigneeId !== user._id
+    );
+  },
+});
+
+/**
+ * Marks a list of tasks as "seen" for the current user by setting
+ * lastNotifiedAssigneeId to the current user's ID.
+ */
+export const acknowledgeAssignments = mutation({
+  args: { taskIds: v.array(v.id("tasks")) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier)
+      )
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    for (const taskId of args.taskIds) {
+      const task = await ctx.db.get(taskId);
+      // Only acknowledge if the task is still assigned to the current user
+      if (task && task.assigneeId === user._id) {
+        await ctx.db.patch(taskId, { lastNotifiedAssigneeId: user._id });
+      }
     }
   },
 });

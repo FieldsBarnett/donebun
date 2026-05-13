@@ -34,6 +34,7 @@ export default defineSchema({
     categoryId: v.optional(v.id("categories")),
     ownerId: v.id("users"),
     assigneeId: v.optional(v.id("users")), // undefined means "Family Pool"
+    lastNotifiedAssigneeId: v.optional(v.id("users")), // Tracks who was last shown the assignment popup
     dueDate: v.optional(v.string()), // ISO date string
     originalDueDate: v.optional(v.string()), // The date this occurrence was originally scheduled for (for exceptions)
     recurrence: v.optional(v.object({

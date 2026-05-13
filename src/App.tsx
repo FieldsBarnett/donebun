@@ -11,6 +11,7 @@ import Settings from "./components/Settings";
 import QuickEntry from "./components/QuickEntry";
 import VoiceEntry from "./components/VoiceEntry";
 import InviteLanding from "./components/InviteLanding";
+import AssignmentNotificationPopup from "./components/AssignmentNotificationPopup";
 import { api } from "../convex/_generated/api";
 import { Users, User, LayoutDashboard, CalendarDays, Calendar, Inbox, Settings as SettingsIcon, BookOpen, Plus, Mic as MicIcon, X } from "lucide-react";
 import { FilterMode } from "./lib/filterUtils";
@@ -223,6 +224,9 @@ function Layout({
         onRecordingChange={setVoiceRecording}
         ref={voiceEntryRef}
       />
+
+      {/* Assignment Notification Popup */}
+      <AssignmentNotificationPopup />
     </div>
   );
 }
