@@ -39,13 +39,13 @@ export default function AssignmentNotificationPopup() {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/30 backdrop-blur-[3px] z-[200] animate-fade-in"
+        className="fixed inset-0 bg-black/30 backdrop-blur-[3px] z-[90] animate-fade-in"
         onClick={handleAcknowledge}
       />
 
       {/* Modal panel */}
       <div
-        className="fixed inset-0 z-[201] flex items-center justify-center p-4 pointer-events-none"
+        className="fixed inset-0 z-[91] flex items-center justify-center p-4 pointer-events-none"
       >
         <div
           className="pointer-events-auto w-full max-w-[520px] max-h-[85vh] flex flex-col animate-modal-in rounded-2xl overflow-hidden border border-white/20"
@@ -127,7 +127,7 @@ export default function AssignmentNotificationPopup() {
               }}
             >
               <CheckCheck size={16} />
-              Got it, all done!
+              Got it!
             </button>
           </div>
         </div>
