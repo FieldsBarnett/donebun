@@ -9,6 +9,8 @@ import { TaskRow } from "./TaskRow";
 export default function AssignmentNotificationPopup() {
   const unseenTasks = useQuery(api.tasks.getUnseenAssignments);
   const updateTaskStatus = useMutation(api.tasks.updateTaskStatus);
+  const updateTask = useMutation(api.tasks.updateTask);
+  const deleteTask = useMutation(api.tasks.deleteTask);
   const acknowledge = useMutation(api.tasks.acknowledgeAssignments);
   const [isVisible, setIsVisible] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<typeof unseenTasks>([]);
@@ -16,10 +18,21 @@ export default function AssignmentNotificationPopup() {
   // Capture the unseen task list the first time it arrives, then freeze it
   // until the user dismisses. This prevents the list from updating reactively
   // while the popup is open (e.g. if one gets re-assigned mid-view).
+  // However, we also sync new changes from unseenTasks to pendingTasks if
+  // the task still exists in both, so external edits update the UI.
   useEffect(() => {
-    if (unseenTasks && unseenTasks.length > 0 && !isVisible) {
+    if (!unseenTasks) return;
+    
+    if (unseenTasks.length > 0 && !isVisible) {
       setPendingTasks(unseenTasks);
       setIsVisible(true);
+    } else if (isVisible) {
+      setPendingTasks(prev => {
+        return prev.map(pt => {
+          const updated = unseenTasks.find(ut => ut._id === pt._id);
+          return updated ? { ...pt, ...updated } : pt;
+        });
+      });
     }
   }, [unseenTasks, isVisible]);
 
@@ -105,10 +118,25 @@ export default function AssignmentNotificationPopup() {
                   onToggle={() => {
                     const nextStatus =
                       task.status === "completed" ? "active" : "completed";
+                    
+                    setPendingTasks(prev => prev.map(t => 
+                      t._id === task._id ? { ...t, status: nextStatus } as any : t
+                    ));
+
                     updateTaskStatus({
                       id: task._id,
                       status: nextStatus,
                     });
+                  }}
+                  onSaveLocal={(updates) => {
+                    setPendingTasks(prev => prev.map(t => 
+                      t._id === task._id ? { ...t, ...updates } as any : t
+                    ));
+                    updateTask({ id: task._id, ...updates });
+                  }}
+                  onRemoveLocal={() => {
+                    setPendingTasks(prev => prev.filter(t => t._id !== task._id));
+                    deleteTask({ id: task._id });
                   }}
                 />
               ))}
