@@ -4,7 +4,7 @@ import { TaskRow } from "./TaskRow";
 import { CalendarDays, Calendar, Clock } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { parseDueDate, isSameDay, toDateKey } from "../lib/dateUtils";
+import { parseDueDate, isSameDay, toDateKey, toLocalISOString } from "../lib/dateUtils";
 import { filterTasks, filterCalendarEvents, FilterMode } from "../lib/filterUtils";
 
 // --- Types ---
@@ -140,7 +140,10 @@ export default function Timeline({ filterMode }: { filterMode: FilterMode }) {
     e.setFullYear(e.getFullYear() + 1);
     e.setHours(23, 59, 59, 999); // Normalize to end of day
     
-    return { queryStart: s.toISOString(), queryEnd: e.toISOString() };
+    return { 
+      queryStart: toLocalISOString(s, false), 
+      queryEnd: toLocalISOString(e, true) // Include time for the end to be safe
+    };
   }, []);
 
   const currentUser = useQuery(api.users.getCurrentUser);

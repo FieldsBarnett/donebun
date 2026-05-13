@@ -42,6 +42,7 @@ The application will replicate the core organizational structure and elegant UX 
         *   **Things 3 Import**: During import, only **Areas** are converted into categories. Tasks belonging to an Area are assigned to the corresponding category; projects and headings are ignored during this mapping to maintain a flat, simple organizational structure.
 *   **Task Interactions**:
     *   **Quick Actions Menu**: A 3-dot context menu on tasks for fast management (Move to tomorrow, Change time, Delete, Repeat options).
+    *   **Status Toggling**: All task checkboxes support two-way toggling between **Active** and **Completed**. This ensures that accidentally checked items can be easily restored to their active state across all views (Dashboard, Timeline, Unscheduled, and Logbook).
 *   **Quick Entry (Global)**: A powerful, high-speed task creation interface accessible from anywhere in the app via a Floating Action Button (FAB) or the `n` keyboard shortcut. (See Section 8 for details).
 *   **Task Details & Interaction**:
     *   **Detail View Interface**: The expanded view mirrors the **Quick Entry** design, providing a consistent experience. It includes:

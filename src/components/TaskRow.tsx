@@ -471,7 +471,7 @@ export function TaskRow({
           <motion.div
             key="expanded"
             layoutId={`task-card-${id}`}
-            className="relative flex flex-col overflow-hidden p-5 -mx-5 mb-4 bg-white shadow-2xl rounded-[16px] border border-[var(--color-hairline)] z-20 cursor-default"
+            className="relative flex flex-col overflow-visible p-5 -mx-5 mb-4 bg-white shadow-2xl rounded-[16px] border border-[var(--color-hairline)] z-20 cursor-default"
             transition={{ type: "spring", stiffness: 500, damping: 40, mass: 0.8 }}
           >
             <div className="flex items-start gap-4 py-[8px]">

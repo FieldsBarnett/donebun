@@ -92,7 +92,7 @@ export default function Unscheduled({ filterMode }: { filterMode: FilterMode }) 
 
       <TaskGroupedList 
         tasks={unscheduledTasks} 
-        onToggle={(task) => updateTaskStatus({ id: task._id, status: "completed" })}
+        onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
         expandedTaskId={taskId}
         onToggleExpand={(newId) => {
           if (newId) searchParams.set("taskId", newId);
@@ -114,7 +114,7 @@ export default function Unscheduled({ filterMode }: { filterMode: FilterMode }) 
 
       <TaskGroupedList 
         tasks={finalRecurringTasks} 
-        onToggle={(task) => updateTaskStatus({ id: task._id, status: "completed" })}
+        onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
         expandedTaskId={taskId}
         onToggleExpand={(newId) => {
           if (newId) searchParams.set("taskId", newId);

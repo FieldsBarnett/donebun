@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { Calendar, ChevronDown, ExternalLink, RefreshCw, UserCheck } from "lucide-react";
+import { Calendar, ChevronDown, RefreshCw, UserCheck } from "lucide-react";
 import ColorPickerModal from "./ColorPickerModal";
 
 
@@ -287,25 +287,6 @@ export default function GoogleCalendarSettings() {
         </div>
       )}
 
-      {/* Setup instructions */}
-      <details className="text-sm text-[var(--color-muted)]">
-        <summary className="cursor-pointer font-medium hover:text-[var(--color-ink)] transition-colors">
-          Setup instructions
-        </summary>
-        <div className="mt-3 p-4 bg-[var(--color-surface-soft)] rounded-lg space-y-2 text-xs leading-relaxed">
-          <p>1. Add <code className="bg-black/5 px-1 rounded">VITE_GOOGLE_CLIENT_ID</code> and <code className="bg-black/5 px-1 rounded">GOOGLE_CLIENT_ID</code> + <code className="bg-black/5 px-1 rounded">GOOGLE_CLIENT_SECRET</code> to your <code className="bg-black/5 px-1 rounded">.env.local</code> and Convex environment variables.</p>
-          <p>2. In Google Cloud Console, add <code className="bg-black/5 px-1 rounded">{window.location.origin}/google-oauth-callback</code> as an Authorized Redirect URI.</p>
-          <p>3. Enable the <strong>Google Calendar API</strong> in your Google Cloud project.</p>
-          <a
-            href="https://console.cloud.google.com/apis/credentials"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[var(--color-primary)] hover:underline"
-          >
-            Open Google Cloud Console <ExternalLink size={10} />
-          </a>
-        </div>
-      </details>
 
       <ColorPickerModal
         isOpen={colorPickerOpen !== null}

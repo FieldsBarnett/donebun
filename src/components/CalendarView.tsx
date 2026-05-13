@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import { parseDueDate, isSameDay } from "../lib/dateUtils";
+import { parseDueDate, isSameDay, toLocalISOString } from "../lib/dateUtils";
 import { filterTasks, filterCalendarEvents, FilterMode } from "../lib/filterUtils";
 
 type ViewMode = "week" | "month";
@@ -37,8 +37,8 @@ export default function CalendarView({ filterMode }: { filterMode: FilterMode })
 
     return { 
       allDays: daysArr,
-      startISO: startMonth.toISOString(),
-      endISO: endMonth.toISOString()
+      startISO: toLocalISOString(startMonth, false),
+      endISO: toLocalISOString(endMonth, true)
     };
   }, []);
 

@@ -135,7 +135,7 @@ export default function Logbook({
                     isPrivate={task.isPrivate}
                     isRecurring={(task as any).isRecurring}
                     recurrenceStrategy={(task as any).recurrence?.strategy}
-                    onToggle={() => updateTaskStatus({ id: task._id, status: "active" })}
+                    onToggle={() => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
                   />
                 ))}
               </div>

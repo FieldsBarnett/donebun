@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { TaskGroupedList } from "./TaskGroupedList";
 import SearchBar from "./SearchBar";
-import { parseDueDate, isSameDay } from "../lib/dateUtils";
+import { parseDueDate, isSameDay, toLocalISOString } from "../lib/dateUtils";
 import { filterTasks, FilterMode } from "../lib/filterUtils";
 
 export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
@@ -17,7 +17,10 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
     s.setHours(0, 0, 0, 0);
     const e = new Date();
     e.setHours(23, 59, 59, 999);
-    return { start: s.toISOString(), end: e.toISOString() };
+    return { 
+      start: toLocalISOString(s, false), 
+      end: e.toISOString() 
+    };
   }, []);
 
   const tasks = useQuery(api.tasks.getTasks, { start, end }) || [];
@@ -65,7 +68,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
           <TaskGroupedList 
             tasks={todayTasks} 
             isToday 
-            onToggle={(task) => updateTaskStatus({ id: task._id, status: "completed" })}
+            onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
             expandedTaskId={taskId}
             onToggleExpand={(newId) => {
               if (newId) searchParams.set("taskId", newId);
@@ -84,7 +87,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
             </div>
             <TaskGroupedList 
               tasks={unscheduledTasks} 
-              onToggle={(task) => updateTaskStatus({ id: task._id, status: "completed" })}
+              onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
               expandedTaskId={taskId}
               onToggleExpand={(newId) => {
                 if (newId) searchParams.set("taskId", newId);
