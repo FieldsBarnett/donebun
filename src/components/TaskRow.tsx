@@ -435,6 +435,11 @@ export function TaskRow({
               <div className="flex-1 min-w-0">
                 <div className={`text-[15px] ${completed ? 'text-[var(--color-muted)] line-through' : 'text-[var(--color-ink)]'} font-medium py-0.5 flex items-center gap-2`}>
                   <motion.span layoutId={`title-${id}`} className="truncate block">{initialTitle}</motion.span>
+                  {dueDate && !isSameDay(parseDueDate(dueDate), new Date()) && (
+                    <span className="text-[11px] text-[var(--color-muted)] font-normal whitespace-nowrap px-1.5 py-0.5 rounded-full bg-black/5">
+                      {formatDateLabel(dueDate)}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -493,7 +498,24 @@ export function TaskRow({
 
               {/* Content Area */}
               <div className="flex-1 min-w-0">
-                <div className="flex flex-col">
+                <div className="flex flex-col mb-1">
+                  {localDueDate && (
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Calendar size={12} className="text-[var(--color-yellow)]" />
+                      <span className="text-[11px] font-bold text-[var(--color-yellow)] uppercase tracking-wider">
+                        {formatDateLabel(localDueDate)}
+                      </span>
+                      {localRecurrence && (
+                        <div className="flex items-center gap-1.5 ml-1">
+                          <span className="text-[var(--color-hairline)]">•</span>
+                          <Repeat size={10} className="text-[var(--color-primary)]" />
+                          <span className="text-[11px] font-bold text-[var(--color-primary)] uppercase tracking-wider">
+                            Recurring
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 mb-1">
                     {localIsPrivate && <EyeOff size={16} className="text-[var(--color-primary)] shrink-0" />}
                     <motion.textarea

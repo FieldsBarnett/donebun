@@ -16,6 +16,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
     const s = new Date();
     s.setHours(0, 0, 0, 0);
     const e = new Date();
+    e.setDate(e.getDate() + 7);
     e.setHours(23, 59, 59, 999);
     return { 
       start: toLocalISOString(s, false), 
@@ -45,6 +46,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
 
   const todayTasks = filteredTasks.filter(t => isVisible(t) && t.dueDate && isSameDay(parseDueDate(t.dueDate), today));
   const unscheduledTasks = filteredTasks.filter(t => isVisible(t) && !t.dueDate);
+  const upcomingTasks = filteredTasks.filter(t => isVisible(t) && t.dueDate && !isSameDay(parseDueDate(t.dueDate), today) && parseDueDate(t.dueDate) > today);
 
   return (
     <div className="px-8 py-10 md:px-14 max-w-4xl mx-auto pb-24">
@@ -87,6 +89,25 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
             </div>
             <TaskGroupedList 
               tasks={unscheduledTasks} 
+              onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
+              expandedTaskId={taskId}
+              onToggleExpand={(newId) => {
+                if (newId) searchParams.set("taskId", newId);
+                else searchParams.delete("taskId");
+                setSearchParams(searchParams);
+              }}
+            />
+          </section>
+        )}
+
+        {upcomingTasks.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1.5 h-6 bg-[var(--color-primary)]/20 rounded-full" />
+              <h3 className="text-[17px] font-bold">Upcoming</h3>
+            </div>
+            <TaskGroupedList 
+              tasks={upcomingTasks} 
               onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
               expandedTaskId={taskId}
               onToggleExpand={(newId) => {

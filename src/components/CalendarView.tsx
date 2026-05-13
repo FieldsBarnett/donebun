@@ -10,7 +10,15 @@ type ViewMode = "week" | "month";
 const HOUR_HEIGHT = 44;
 
 export default function CalendarView({ filterMode }: { filterMode: FilterMode }) {
-  const [view, setView] = useState<ViewMode>("month");
+  const [view, setView] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem("donebun_calendar_view") as ViewMode;
+    return (saved === "week" || saved === "month") ? saved : "month";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("donebun_calendar_view", view);
+  }, [view]);
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const navigate = useNavigate();
 

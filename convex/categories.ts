@@ -70,3 +70,35 @@ export const update = mutation({
     await ctx.db.patch(id, updates);
   },
 });
+
+export const remove = mutation({
+  args: { id: v.id("categories") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    const category = await ctx.db.get(args.id);
+    if (!category || category.familyId !== user?.familyId) {
+      throw new Error("Unauthorized");
+    }
+
+    // Find all tasks using this category
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_category", (q) => q.eq("categoryId", args.id))
+      .collect();
+
+    // Remove category from all tasks
+    for (const task of tasks) {
+      await ctx.db.patch(task._id, { categoryId: undefined });
+    }
+
+    // Delete the category
+    await ctx.db.delete(args.id);
+  },
+});

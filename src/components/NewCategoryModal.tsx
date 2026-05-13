@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { X, Plus, Save } from "lucide-react";
+import { X, Plus, Save, Trash2 } from "lucide-react";
 import IconPickerModal from "./IconPickerModal";
 import CategoryIcon from "./CategoryIcon";
 import Modal from "./Modal";
@@ -23,10 +23,12 @@ export default function NewCategoryModal({ isOpen, onClose, onCreated, editingCa
   const [icon, setIcon] = useState("Tag");
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   
   const createCategory = useMutation(api.categories.create);
   const updateCategory = useMutation(api.categories.update);
+  const deleteCategory = useMutation(api.categories.remove);
 
   useEffect(() => {
     if (isOpen) {
@@ -43,7 +45,7 @@ export default function NewCategoryModal({ isOpen, onClose, onCreated, editingCa
 
   const handleSave = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!name.trim() || isSubmitting) return;
+    if (!name.trim() || isSubmitting || isDeleting) return;
 
     setIsSubmitting(true);
     try {
@@ -68,6 +70,21 @@ export default function NewCategoryModal({ isOpen, onClose, onCreated, editingCa
     }
   };
 
+  const handleDelete = async () => {
+    if (!editingCategory || isDeleting || isSubmitting) return;
+    if (window.confirm("Delete this category? All tasks in this category will be unassigned.")) {
+      setIsDeleting(true);
+      try {
+        await deleteCategory({ id: editingCategory._id });
+        onClose();
+      } catch (error) {
+        console.error("Failed to delete category:", error);
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} zIndex={250}>
       <div 
@@ -78,12 +95,28 @@ export default function NewCategoryModal({ isOpen, onClose, onCreated, editingCa
             <h3 className="text-lg font-bold text-[var(--color-ink)]">
               {editingCategory ? "Edit Category" : "New Category"}
             </h3>
-            <button 
-              onClick={onClose}
-              className="p-1 hover:bg-black/5 rounded-full transition-colors"
-            >
-              <X size={20} className="text-[var(--color-muted)]" />
-            </button>
+            <div className="flex items-center gap-2">
+              {editingCategory && (
+                <button 
+                  onClick={handleDelete}
+                  disabled={isDeleting || isSubmitting}
+                  className="p-2 hover:bg-red-50 text-red-500 rounded-full transition-colors disabled:opacity-50"
+                  title="Delete Category"
+                >
+                  {isDeleting ? (
+                    <div className="w-5 h-5 border-2 border-red-200 border-t-red-500 rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 size={20} />
+                  )}
+                </button>
+              )}
+              <button 
+                onClick={onClose}
+                className="p-2 hover:bg-black/5 rounded-full transition-colors"
+              >
+                <X size={20} className="text-[var(--color-muted)]" />
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleSave} className="space-y-6">

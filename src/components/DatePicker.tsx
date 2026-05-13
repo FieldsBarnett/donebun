@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { X, Calendar, ChevronRight, ChevronLeft, Clock, Repeat } from "lucide-react";
 import { parseDueDate, isSameDay } from "../lib/dateUtils";
 import PickerWrapper from "./PickerWrapper";
@@ -25,7 +25,8 @@ export default function DatePicker({
   className = "fixed md:absolute top-1/2 -translate-y-1/2 md:top-full md:translate-y-0 right-4 left-4 md:right-0 md:left-auto md:translate-x-0 w-auto md:w-[280px] bg-white border border-[var(--color-hairline)] rounded-xl shadow-2xl p-4 animate-modal-in overflow-hidden",
   zIndex,
 }: DatePickerProps) {
-  const [viewDate, setViewDate] = useState(new Date());
+  const initialDate = useMemo(() => value ? parseDueDate(value) : new Date(), []);
+  const [viewDate, setViewDate] = useState(initialDate);
   const [selectedTime, setSelectedTime] = useState(value.includes("T") ? value.split("T")[1].substring(0, 5) : "");
   const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
 
@@ -83,7 +84,7 @@ export default function DatePicker({
         className={className}
         zIndex={zIndex}
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">When</span>
           <div className="flex items-center gap-1">
             {onRecurrenceChange && (
@@ -108,6 +109,42 @@ export default function DatePicker({
             </button>
           </div>
         </div>
+
+        {/* Selected date display */}
+        {value ? (
+          <div className="flex items-center justify-between mb-3 px-2 py-1.5 bg-[var(--color-yellow)]/10 border border-[var(--color-yellow)]/20 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Calendar size={12} className="text-[var(--color-yellow)]" />
+              <span className="text-[12px] font-bold text-[var(--color-yellow)]">
+                {(() => {
+                  const d = parseDueDate(value);
+                  const today = new Date();
+                  const tomorrow = new Date();
+                  tomorrow.setDate(today.getDate() + 1);
+                  if (isSameDay(d, today)) return "Today";
+                  if (isSameDay(d, tomorrow)) return "Tomorrow";
+                  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                })()}
+                {value.includes("T") && (
+                  <span className="ml-1 opacity-70">
+                    at {parseDueDate(value).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                )}
+              </span>
+            </div>
+            <button
+              onClick={() => { onChange(""); onClose(); }}
+              className="text-[10px] font-bold text-[var(--color-muted)] hover:text-red-500 transition-colors px-1.5 py-0.5 hover:bg-red-50 rounded-md"
+            >
+              Clear
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mb-3 px-2 py-1.5 bg-black/[0.03] border border-[var(--color-hairline)] rounded-lg">
+            <Calendar size={12} className="text-[var(--color-muted)]" />
+            <span className="text-[12px] text-[var(--color-muted)] italic">No date selected</span>
+          </div>
+        )}
 
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-2 px-1">

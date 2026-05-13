@@ -229,7 +229,15 @@ function Layout({
 
 function AppContent() {
   const storeUser = useMutation(api.users.store);
-  const [filterMode, setFilterMode] = useState<FilterMode>("personal");
+  const [filterMode, setFilterMode] = useState<FilterMode>(() => {
+    const saved = localStorage.getItem("donebun_filter_mode") as FilterMode;
+    return (["personal", "family", "everyone"].includes(saved)) ? saved : "personal";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("donebun_filter_mode", filterMode);
+  }, [filterMode]);
+
 
   useEffect(() => {
     storeUser().catch(console.error);
