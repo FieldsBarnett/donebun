@@ -13,7 +13,7 @@ export default function AssignmentNotificationPopup() {
   const deleteTask = useMutation(api.tasks.deleteTask);
   const acknowledge = useMutation(api.tasks.acknowledgeAssignments);
   const [isVisible, setIsVisible] = useState(false);
-  const [pendingTasks, setPendingTasks] = useState<typeof unseenTasks>([]);
+  const [pendingTasks, setPendingTasks] = useState<NonNullable<typeof unseenTasks>>([]);
 
   // Capture the unseen task list the first time it arrives, then freeze it
   // until the user dismisses. This prevents the list from updating reactively

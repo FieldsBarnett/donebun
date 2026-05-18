@@ -131,6 +131,7 @@ export const updateProfile = mutation({
 export const updatePreferences = mutation({
   args: {
     moveTasksToLogbook: v.optional(v.union(v.literal("immediately"), v.literal("next_day"))),
+    pastDueTasks: v.optional(v.union(v.literal("today"), v.literal("past"))),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -152,6 +153,7 @@ export const updatePreferences = mutation({
     const preferences: any = {
       ...(user.preferences || {}),
       ...(args.moveTasksToLogbook ? { moveTasksToLogbook: args.moveTasksToLogbook } : {}),
+      ...(args.pastDueTasks ? { pastDueTasks: args.pastDueTasks } : {}),
     };
 
     await ctx.db.patch(user._id, { preferences });

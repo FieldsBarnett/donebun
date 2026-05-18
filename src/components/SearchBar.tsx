@@ -35,7 +35,14 @@ export default function SearchBar() {
     ? tasks
         .map((t) => ({ task: t, score: fuzzyScore(query, t.title) }))
         .filter((r) => r.score > 0)
-        .sort((a, b) => b.score - a.score)
+        .sort((a, b) => {
+          const aCompleted = a.task.status === "completed";
+          const bCompleted = b.task.status === "completed";
+          if (aCompleted !== bCompleted) {
+            return aCompleted ? 1 : -1;
+          }
+          return b.score - a.score;
+        })
         .slice(0, 8)
         .map((r) => r.task)
     : [];

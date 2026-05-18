@@ -3,10 +3,10 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Sync all calendars every 15 minutes
+// Sync all calendars every two hours
 crons.interval(
   "sync all calendars",
-  { minutes: 15 },
+  { hours: 2 },
   internal.googleActions.syncAll,
 );
 

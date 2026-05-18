@@ -12,7 +12,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const taskId = searchParams.get("taskId");
   
-  const { start, end } = useMemo(() => {
+  const { end } = useMemo(() => {
     const s = new Date();
     s.setHours(0, 0, 0, 0);
     const e = new Date();
@@ -24,7 +24,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
     };
   }, []);
 
-  const tasks = useQuery(api.tasks.getTasks, { start, end }) || [];
+  const tasks = useQuery(api.tasks.getTasks, { end }) || [];
   const updateTaskStatus = useMutation(api.tasks.updateTaskStatus);
 
 
@@ -44,7 +44,21 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
     return false;
   };
 
-  const todayTasks = filteredTasks.filter(t => isVisible(t) && t.dueDate && isSameDay(parseDueDate(t.dueDate), today));
+  const pastDueBehavior = currentUser?.preferences?.pastDueTasks || "today";
+
+  const todayTasks = filteredTasks.filter(t => {
+    if (!isVisible(t) || !t.dueDate) return false;
+    const date = parseDueDate(t.dueDate);
+    if (isSameDay(date, today)) return true;
+    if (date < today && t.status === "active" && pastDueBehavior === "today") return true;
+    return false;
+  });
+  
+  const overdueTasks = filteredTasks.filter(t => {
+    if (!isVisible(t) || !t.dueDate) return false;
+    const date = parseDueDate(t.dueDate);
+    return date < today && !isSameDay(date, today) && t.status === "active" && pastDueBehavior === "past";
+  });
   const unscheduledTasks = filteredTasks.filter(t => isVisible(t) && !t.dueDate);
   const upcomingTasks = filteredTasks.filter(t => isVisible(t) && t.dueDate && !isSameDay(parseDueDate(t.dueDate), today) && parseDueDate(t.dueDate) > today);
 
@@ -79,6 +93,25 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
             }}
           />
         </section>
+
+        {overdueTasks.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1.5 h-6 bg-red-500/50 rounded-full" />
+              <h3 className="text-[17px] font-bold text-red-600">Overdue</h3>
+            </div>
+            <TaskGroupedList 
+              tasks={overdueTasks} 
+              onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
+              expandedTaskId={taskId}
+              onToggleExpand={(newId) => {
+                if (newId) searchParams.set("taskId", newId);
+                else searchParams.delete("taskId");
+                setSearchParams(searchParams);
+              }}
+            />
+          </section>
+        )}
         
         {/* Unscheduled / Unsorted items */}
         {unscheduledTasks.length > 0 && (

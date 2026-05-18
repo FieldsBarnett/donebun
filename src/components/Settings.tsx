@@ -174,6 +174,28 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
                         {moveTasksPreference === "next_day" && <Check size={20} className="text-[#007aff]" />}
                       </button>
                     </div>
+                    <div className="bg-[var(--color-surface-soft)]/50 rounded-3xl overflow-hidden border border-[var(--color-hairline)] mt-6">
+                      <div className="px-6 py-5 border-b border-[var(--color-hairline)]">
+                        <p className="font-bold text-lg mb-1">Past Due Tasks</p>
+                        <p className="text-sm text-[var(--color-muted)]">Choose how incomplete tasks with past dates are displayed on the Dashboard.</p>
+                      </div>
+                      
+                      <button 
+                        onClick={() => updatePreferences({ pastDueTasks: "today" })}
+                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-white transition-colors group"
+                      >
+                        <span className={`text-base ${(currentUser?.preferences?.pastDueTasks || "today") === "today" ? "font-bold" : "font-medium"}`}>Show in Today (Default)</span>
+                        {(currentUser?.preferences?.pastDueTasks || "today") === "today" && <Check size={20} className="text-[#007aff]" />}
+                      </button>
+                      
+                      <button 
+                        onClick={() => updatePreferences({ pastDueTasks: "past" })}
+                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-white transition-colors group border-t border-[var(--color-hairline)]"
+                      >
+                        <span className={`text-base ${currentUser?.preferences?.pastDueTasks === "past" ? "font-bold" : "font-medium"}`}>Show in Overdue</span>
+                        {currentUser?.preferences?.pastDueTasks === "past" && <Check size={20} className="text-[#007aff]" />}
+                      </button>
+                    </div>
                   </section>
                 </div>
               </div>
