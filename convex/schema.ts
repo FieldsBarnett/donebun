@@ -11,7 +11,7 @@ export default defineSchema({
     initials: v.optional(v.string()), // max 2 letters
     preferences: v.optional(v.object({
       moveTasksToLogbook: v.union(v.literal("immediately"), v.literal("next_day")),
-      pastDueTasks: v.optional(v.union(v.literal("today"), v.literal("past"))),
+      pastDueTasks: v.optional(v.union(v.literal("today"), v.literal("past"), v.literal("timeline"))),
     })),
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_family", ["familyId"]),

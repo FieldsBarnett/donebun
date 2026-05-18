@@ -195,6 +195,14 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
                         <span className={`text-base ${currentUser?.preferences?.pastDueTasks === "past" ? "font-bold" : "font-medium"}`}>Show in Overdue</span>
                         {currentUser?.preferences?.pastDueTasks === "past" && <Check size={20} className="text-[#007aff]" />}
                       </button>
+                      
+                      <button 
+                        onClick={() => updatePreferences({ pastDueTasks: "timeline" })}
+                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-white transition-colors group border-t border-[var(--color-hairline)]"
+                      >
+                        <span className={`text-base ${currentUser?.preferences?.pastDueTasks === "timeline" ? "font-bold" : "font-medium"}`}>Show only in Timeline</span>
+                        {currentUser?.preferences?.pastDueTasks === "timeline" && <Check size={20} className="text-[#007aff]" />}
+                      </button>
                     </div>
                   </section>
                 </div>
