@@ -72,6 +72,7 @@ export const importFromThings3 = mutation({
         categoryId: task.originalAreaId ? categoryMapping.get(task.originalAreaId) : undefined,
         ownerId: user._id,
         assigneeId: user._id, // Assign to importer as requested
+        lastNotifiedAssigneeId: user._id,
         dueDate: task.dueDate,
         recurrence: task.recurrence,
         checklist: task.checklist,

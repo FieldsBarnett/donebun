@@ -56,7 +56,10 @@ export const getTasks = query({
         .withIndex("by_family_dueDate", (q) => q.eq("familyId", familyId).eq("dueDate", undefined as any))
         .collect();
 
-      tasks = [...scheduledInRange, ...unscheduled];
+      // lte queries on optional/missing fields like dueDate can return documents where dueDate is undefined in Convex index scans.
+      // We filter scheduledInRange to only include tasks with a defined dueDate to prevent duplicates.
+      const scheduled = scheduledInRange.filter((t) => t.dueDate !== undefined);
+      tasks = [...scheduled, ...unscheduled];
     } else {
       tasks = await ctx.db
         .query("tasks")

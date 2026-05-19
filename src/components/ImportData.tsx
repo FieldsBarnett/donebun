@@ -83,7 +83,7 @@ export default function ImportData({ onBack }: ImportDataProps) {
         let dueDate: string | undefined = undefined;
         const ts = (deadline as number) || (startDate as number);
         if (ts) {
-          dueDate = new Date(ts * 1000).toISOString();
+          dueDate = new Date((ts + 978307200) * 1000).toISOString();
         }
 
         // Parse Recurrence
@@ -328,7 +328,7 @@ function parseThings3Recurrence(plistStr: string) {
   // Extract dates from plist
   // ia = initial anchor, sr = start, ed = end
   const startTs = data.ia || data.sr;
-  const startDate = startTs ? new Date(startTs * 1000).toISOString() : undefined;
+  const startDate = startTs ? new Date((startTs + 978307200) * 1000).toISOString() : undefined;
   
   // Refine dayOfMonth/daysOfWeek from startDate if missing
   if (startDate) {
@@ -344,7 +344,7 @@ function parseThings3Recurrence(plistStr: string) {
   // We'll ignore it if it's beyond year 3000
   let endDate: string | undefined = undefined;
   if (data.ed && data.ed < 32503680000) { // 32503680000 = year 3000
-    endDate = new Date(data.ed * 1000).toISOString();
+    endDate = new Date((data.ed + 978307200) * 1000).toISOString();
   }
 
   return {

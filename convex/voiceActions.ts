@@ -108,7 +108,16 @@ function resolveAssigneeId(
   if (!rawId) return null;
   if (rawId === familyId) return familyId;
   const member = familyMembers.find((m) => m.id === rawId);
-  return member ? member.id : null;
+  if (member) return member.id;
+  
+  // Fallback: If LLM returned a name instead of an ID, try to match it
+  const lowerRaw = rawId.toLowerCase();
+  const memberByName = familyMembers.find(
+    (m) => m.name.toLowerCase().includes(lowerRaw) || lowerRaw.includes(m.name.toLowerCase())
+  );
+  if (memberByName) return memberByName.id;
+
+  return null;
 }
 
 // ─── Extract tasks from audio ─────────────────────────────────────────────────
@@ -151,6 +160,7 @@ Rules:
 - Task titles should be concise but follow the original wording as much as possible.
 - Extra context, details, or notes belong in the "details" field.
 - "assigneeId" must be one of the valid assignee IDs above, or null to default to the current user.
+  - IMPORTANT: You MUST output the exact id string, NOT the person's name.
   - Use the family pool ID (${args.familyId}) when the task is shared/for everyone/no specific person.
   - Only assign to a specific person if they are clearly mentioned by name.
   - Default (null) means the current user (${args.currentUserName}).
