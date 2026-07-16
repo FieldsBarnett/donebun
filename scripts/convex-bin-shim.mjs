@@ -21,10 +21,20 @@ function runRealConvex() {
 }
 
 const isDeploy = args[0] === "deploy";
-const isCloudflare = process.env.CF_PAGES === "1";
+const isCloudflare = Boolean(process.env.CF_PAGES);
 const hasDeployKey = Boolean(process.env.CONVEX_DEPLOY_KEY);
+const isMainBranch = process.env.CF_PAGES_BRANCH === "main";
 
-if (isDeploy && isCloudflare && !hasDeployKey) {
+function isPreviewDeployKey(adminKey) {
+  const parts = adminKey.split("|");
+  if (parts.length === 1) {
+    return false;
+  }
+  const prefixParts = parts[0].split(":");
+  return prefixParts[0] === "preview" && prefixParts.length === 3;
+}
+
+function runFrontendBuildOnly(reason) {
   const cmdIndex = args.indexOf("--cmd");
   const buildCmd = cmdIndex >= 0 ? args[cmdIndex + 1] : undefined;
 
@@ -35,15 +45,33 @@ if (isDeploy && isCloudflare && !hasDeployKey) {
     process.exit(1);
   }
 
-  console.warn(
-    "[convex-bin-shim] Cloudflare preview build has no CONVEX_DEPLOY_KEY; running frontend build only.",
-  );
+  console.warn(`[convex-bin-shim] ${reason}`);
   const result = spawnSync(buildCmd, {
     shell: true,
     stdio: "inherit",
     env: process.env,
   });
   process.exit(result.status ?? 1);
+}
+
+if (isDeploy && isCloudflare && !isMainBranch) {
+  if (!hasDeployKey) {
+    runFrontendBuildOnly(
+      "Cloudflare preview build has no CONVEX_DEPLOY_KEY; running frontend build only.",
+    );
+  }
+
+  if (!isPreviewDeployKey(process.env.CONVEX_DEPLOY_KEY ?? "")) {
+    runFrontendBuildOnly(
+      "Cloudflare preview build has a production deploy key; running frontend build only. Use a Preview Deploy Key for full-stack preview deploys.",
+    );
+  }
+}
+
+if (isDeploy && isCloudflare && !hasDeployKey) {
+  runFrontendBuildOnly(
+    "Cloudflare build has no CONVEX_DEPLOY_KEY; running frontend build only.",
+  );
 }
 
 runRealConvex();
