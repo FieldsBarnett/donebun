@@ -34,3 +34,5 @@ CONVEX_AGENT_MODE=anonymous npx convex env set SITE_URL "http://localhost:1420"
 **Auth:** The whole app is gated behind Better Auth (email/password). Use the "Need an account? Sign up" flow to create a user; no email verification is required in dev.
 
 **Checks:** No lint script exists. Type-check with `npx tsc --noEmit`; full build is `npm run build` (`tsc && vite build`).
+
+**Cloudflare Pages PR builds:** Preview environments often lack `CONVEX_DEPLOY_KEY`. A postinstall shim (`scripts/patch-convex-bin.mjs`) makes `npx convex deploy --cmd 'npm run build'` fall back to frontend-only builds on preview; production URLs live in `.env.production`. For full-stack preview deploys, add a Convex Preview Deploy Key to Cloudflare Preview env vars. See `DEPLOYMENT.md`.

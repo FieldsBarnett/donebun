@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:cloudflare": "bash scripts/cloudflare-build.sh",
+    "postinstall": "node scripts/patch-convex-bin.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

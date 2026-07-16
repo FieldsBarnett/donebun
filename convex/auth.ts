@@ -8,7 +8,16 @@ import authConfig from "./auth.config";
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | undefined;
+
+function getResend(): Resend {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY is not configured");
+  }
+  resendClient ??= new Resend(apiKey);
+  return resendClient;
+}
 
 const trustedOrigins = [
   "https://donebun.app",
@@ -31,7 +40,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     emailAndPassword: {
       enabled: true,
       async sendVerificationEmail({ user, url }: { user: any; url: string }) {
-        await resend.emails.send({
+        await getResend().emails.send({
           from: "onboarding@donebun.app",
           to: user.email,
           subject: "Verify your email - DoneBun",
@@ -39,7 +48,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         });
       },
       async sendResetPassword({ user, url }: { user: any; url: string }) {
-        await resend.emails.send({
+        await getResend().emails.send({
           from: "onboarding@donebun.app",
           to: user.email,
           subject: "Reset your password - DoneBun",
