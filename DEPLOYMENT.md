@@ -8,9 +8,22 @@ In the Cloudflare Pages dashboard for your project:
 
 ### Build Settings
 - **Framework Preset**: `Vite`
-- **Build Command**: `npx convex deploy --cmd 'npm run build'`
+- **Build Command**: `npx convex deploy --cmd 'npm run build'` (production) — preview PR builds also work via the postinstall Convex CLI shim when `CONVEX_DEPLOY_KEY` is not set in the Preview environment (see below).
 - **Build Output Directory**: `dist`
 - **Node.js Version**: `20` or higher
+
+Alternatively, you can set the build command to `npm run build:cloudflare` for explicit branch-aware behavior.
+
+### Preview pull request builds
+
+Cloudflare Pages preview environments often do not have `CONVEX_DEPLOY_KEY` configured. Without it, `npx convex deploy` fails before the frontend build runs.
+
+This repo handles that in two ways:
+
+1. **Automatic shim (default):** `postinstall` patches the local `convex` CLI so that on Cloudflare preview builds without `CONVEX_DEPLOY_KEY`, it skips backend deploy and runs the `--cmd` build step only. Public production Convex URLs are provided via `.env.production`.
+2. **Optional full preview deploys:** Add a Convex **Preview Deploy Key** as `CONVEX_DEPLOY_KEY` in Cloudflare **Preview** environment variables (Settings → Environment variables). Then preview branches deploy to isolated Convex preview backends.
+
+For frontend-only preview builds, you can also set `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` in the Cloudflare Preview environment instead of relying on `.env.production`.
 
 ### Environment Variables (Production)
 Set these in **Settings > Environment variables** on Cloudflare. **IMPORTANT**: For `CONVEX_DEPLOY_KEY`, ensure you set it for both **Build** and **Preview** environments if needed.
