@@ -11,3 +11,5 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+For DoneBun-specific pitfalls (recurring tasks, Cloudflare preview builds, local Convex setup), read **`AGENTS.md` → Gotchas** before changing task/recurrence code.
