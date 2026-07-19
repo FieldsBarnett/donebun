@@ -36,3 +36,20 @@ CONVEX_AGENT_MODE=anonymous npx convex env set SITE_URL "http://localhost:1420"
 **Checks:** No lint script exists. Type-check with `npx tsc --noEmit`; full build is `npm run build` (`tsc && vite build`).
 
 **Cloudflare Pages PR builds:** Preview environments often lack `CONVEX_DEPLOY_KEY`. A postinstall shim (`scripts/patch-convex-bin.mjs`) makes `npx convex deploy --cmd 'npm run build'` fall back to frontend-only builds on preview; production URLs live in `.env.production`. For full-stack preview deploys, add a Convex Preview Deploy Key to Cloudflare Preview env vars. See `DEPLOYMENT.md`.
+
+## Gotchas
+
+Project-specific pitfalls that are easy to reintroduce:
+
+### Virtual recurring task IDs contain colons
+
+Fixed-time recurring tasks use virtual IDs shaped like `${rootTaskId}:${isoDueDate}` (example: `jd7abc:2026-07-10T09:00:00`). ISO datetimes include colons in the time portion.
+
+**Do not** parse these with `id.split(":")` or `[taskId, virtualDate] = id.split(":")`. That truncates timed occurrences to `2026-07-10T09`, so delete/edit/complete on "this occurrence only" silently fails because `excludedDates` never matches.
+
+**Do** use the shared helpers in `convex/recurrence.ts`:
+
+- `parseVirtualTaskId(id)` — split only on the **first** colon
+- `formatVirtualTaskId(taskId, virtualDate)` — build virtual IDs consistently
+
+Any new code that reads or writes virtual task IDs (mutations, queries, frontend helpers) must use these helpers or equivalent first-colon parsing.
