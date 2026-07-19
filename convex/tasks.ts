@@ -1,6 +1,6 @@
 // Recurring task expansion and performance-optimized fetching
 import { mutation, query } from "./_generated/server";
-import { Doc, Id } from "./_generated/dataModel";
+import { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { 
   calculateNextDueDate, 
@@ -8,7 +8,9 @@ import {
   excludeVirtualDate, 
   splitSeries, 
   spawnNextCompletionTask,
-  removeSpawnedCompletionTask
+  removeSpawnedCompletionTask,
+  formatVirtualTaskId,
+  parseVirtualTaskId,
 } from "./recurrence";
 
 export const getTasks = query({
@@ -127,7 +129,7 @@ export const getTasks = query({
           if (!isExcluded && !hasMaterialized) {
             expandedTasks.push({
               ...task,
-              _id: `${task._id}:${nextDateStr}`,
+              _id: formatVirtualTaskId(task._id, nextDateStr),
               dueDate: nextDateStr,
               status: "active",
               statusSet: task.statusSet,
@@ -216,19 +218,8 @@ export const updateTaskStatus = mutation({
     status: v.union(v.literal("active"), v.literal("completed"), v.literal("deleted")),
   },
   handler: async (ctx, args) => {
-    let task: Doc<"tasks"> | null;
-    let isVirtual = false;
-    let virtualDate: string | undefined;
-
-    if (args.id.includes(":")) {
-      const [id, date] = args.id.split(":");
-      task = await ctx.db.get(id as Id<"tasks">);
-      isVirtual = true;
-      virtualDate = date;
-    } else {
-      task = await ctx.db.get(args.id as Id<"tasks">);
-    }
-
+    const { taskId, virtualDate, isVirtual } = parseVirtualTaskId(args.id);
+    const task = await ctx.db.get(taskId as Id<"tasks">);
     if (!task) return;
 
     if (isVirtual && task.recurrence && virtualDate) {
@@ -295,9 +286,7 @@ export const updateTask = mutation({
     const { id, updateMode = "single", ...updatesObj } = args;
     const updates: any = updatesObj;
 
-    const isVirtual = id.includes(":");
-    const taskId = isVirtual ? id.split(":")[0] : id;
-    const virtualDate = isVirtual ? id.split(":")[1] : null;
+    const { taskId, virtualDate, isVirtual } = parseVirtualTaskId(id);
 
     const task = await ctx.db.get(taskId as Id<"tasks">);
     if (!task) throw new Error("Task not found");
@@ -390,9 +379,7 @@ export const deleteTask = mutation({
   handler: async (ctx, args) => {
     const { id, updateMode = "single" } = args;
 
-    const isVirtual = id.includes(":");
-    const taskId = isVirtual ? id.split(":")[0] : id;
-    const virtualDate = isVirtual ? id.split(":")[1] : null;
+    const { taskId, virtualDate, isVirtual } = parseVirtualTaskId(id);
 
     const task = await ctx.db.get(taskId as Id<"tasks">);
     if (!task) return;
