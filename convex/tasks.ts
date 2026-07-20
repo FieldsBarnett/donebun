@@ -11,6 +11,7 @@ import {
   removeSpawnedCompletionTask,
   formatVirtualTaskId,
   parseVirtualTaskId,
+  endFixedSeriesBefore,
 } from "./recurrence";
 
 export const getTasks = query({
@@ -425,13 +426,7 @@ export const deleteTask = mutation({
 
     if (updateMode === "future") {
        const splitDate = virtualDate || task.dueDate || new Date().toISOString();
-       if (rootTask.recurrence) {
-         const endDate = new Date(splitDate);
-         endDate.setDate(endDate.getDate() - 1);
-         await ctx.db.patch(rootId, {
-           recurrence: { ...rootTask.recurrence, endDate: endDate.toISOString() }
-         });
-       }
+       await endFixedSeriesBefore(ctx as any, rootId, rootTask, splitDate);
        return;
     }
 

@@ -30,7 +30,7 @@ export function formatVirtualTaskId(
   return `${taskId}:${virtualDate}`;
 }
 
-function toLocalISOString(date: Date, includeTime: boolean): string {
+export function toLocalISOString(date: Date, includeTime: boolean): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -161,20 +161,36 @@ export async function materializeVirtualTask(
   });
 }
 
+export async function endFixedSeriesBefore(
+  ctx: MutationCtx,
+  rootId: Id<"tasks">,
+  rootTask: Doc<"tasks">,
+  splitDate: string,
+) {
+  if (!rootTask.recurrence) return;
+
+  const endDate = new Date(splitDate);
+  endDate.setDate(endDate.getDate() - 1);
+  await ctx.db.patch(rootId, {
+    recurrence: {
+      ...rootTask.recurrence,
+      endDate: toLocalISOString(endDate, splitDate.includes("T")),
+    },
+  });
+
+  if (rootTask.recurrence.strategy === "fixed") {
+    await excludeVirtualDate(ctx, rootId, splitDate);
+  }
+}
+
 export async function splitSeries(
   ctx: MutationCtx,
   rootTask: Doc<"tasks">,
   splitDate: string,
   updates: Record<string, any>
 ) {
-  // 1. Update existing root to end before splitDate
-  if (rootTask.recurrence) {
-    const endDate = new Date(splitDate);
-    endDate.setDate(endDate.getDate() - 1);
-    await ctx.db.patch(rootTask._id, {
-      recurrence: { ...rootTask.recurrence, endDate: toLocalISOString(endDate, splitDate.includes("T")) }
-    });
-  }
+  // 1. End the old series before splitDate and hide the split occurrence on it
+  await endFixedSeriesBefore(ctx, rootTask._id, rootTask, splitDate);
 
   // 2. Create new root starting at splitDate with updates
   return await ctx.db.insert("tasks", {

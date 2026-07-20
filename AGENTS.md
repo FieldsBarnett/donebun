@@ -53,3 +53,12 @@ Fixed-time recurring tasks use virtual IDs shaped like `${rootTaskId}:${isoDueDa
 - `formatVirtualTaskId(taskId, virtualDate)` — build virtual IDs consistently
 
 Any new code that reads or writes virtual task IDs (mutations, queries, frontend helpers) must use these helpers or equivalent first-colon parsing.
+
+### Splitting a fixed series ("this and following")
+
+`splitSeries` / `endFixedSeriesBefore` must do **both**:
+
+1. Set `recurrence.endDate` on the old root to the day before the split date (stops virtual expansion).
+2. Add the split date to `excludedDates` on the old root (hides that occurrence on the old root document and any virtual on that date).
+
+Setting only `endDate` leaves the old occurrence visible when `root.dueDate === splitDate`, or when a virtual on the split date was already expanded — you'll see duplicates alongside the new series root.
