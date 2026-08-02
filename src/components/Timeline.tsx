@@ -225,20 +225,37 @@ export default function Timeline({ filterMode }: { filterMode: FilterMode }) {
     return map;
   }, [tasks, calendarEvents]);
 
-  // Sorted list of date keys that have content
   const todayKey = toDateKey(today);
-
-  const allKeys = Array.from(dayMap.keys()).sort();
-
-  // Ensure today is always visible (even if empty)
-  if (!dayMap.has(todayKey)) {
-    dayMap.set(todayKey, []);
-    allKeys.push(todayKey);
-    allKeys.sort();
-  }
-
-  // Target date from ?date= query param
+  // Target date from ?date= (widget calendar day Links, in-app nav)
   const targetDateKey = searchParams.get("date") ?? todayKey;
+
+  // Include today + focused day even when empty so day taps always have a section.
+  const allKeys = useMemo(() => {
+    const keys = new Set(dayMap.keys());
+    keys.add(todayKey);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(targetDateKey)) {
+      keys.add(targetDateKey);
+    }
+    return Array.from(keys).sort();
+  }, [dayMap, todayKey, targetDateKey]);
+
+  const scrollDateKey = useMemo(() => {
+    if (allKeys.includes(targetDateKey)) return targetDateKey;
+    if (allKeys.length === 0) return targetDateKey;
+    const targetMs = new Date(targetDateKey + "T12:00:00").getTime();
+    let best = allKeys[0]!;
+    let bestDist = Math.abs(
+      new Date(best + "T12:00:00").getTime() - targetMs
+    );
+    for (const key of allKeys) {
+      const dist = Math.abs(new Date(key + "T12:00:00").getTime() - targetMs);
+      if (dist < bestDist) {
+        best = key;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }, [allKeys, targetDateKey]);
 
   // Refs for scrolling to the correct section
   const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -249,17 +266,26 @@ export default function Timeline({ filterMode }: { filterMode: FilterMode }) {
     else sectionRefs.current.delete(key);
   }, []);
 
-  // Scroll to target date on mount or when target changes
+  // Scroll to target date on mount or when target / data changes
   useEffect(() => {
-    // Wait for layout
-    const timer = setTimeout(() => {
-      const el = sectionRefs.current.get(targetDateKey);
+    let cancelled = false;
+    const tryScroll = (attempt: number) => {
+      if (cancelled) return;
+      const el = sectionRefs.current.get(scrollDateKey);
       if (el && containerRef.current) {
         el.scrollIntoView({ behavior: "auto", block: "start" });
+        return;
       }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [targetDateKey, allKeys.join(",")]);
+      if (attempt < 12) {
+        window.setTimeout(() => tryScroll(attempt + 1), 80);
+      }
+    };
+    const timer = window.setTimeout(() => tryScroll(0), 50);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [scrollDateKey, targetDateKey, allKeys.join(",")]);
 
   const handleToggleTask = async (taskId: string, currentStatus: "active" | "completed") => {
     await updateStatus({

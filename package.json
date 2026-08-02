@@ -6,16 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:ios": "TAURI_ENV_PLATFORM=ios tsc && vite build --mode development",
+    "build:ios:bundle": "npm run build && node scripts/copy-ios-assets.mjs",
     "build:cloudflare": "bash scripts/cloudflare-build.sh",
     "postinstall": "node scripts/patch-convex-bin.mjs",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:ios": "tauri ios dev",
+    "tauri:ios:live": "tauri ios dev --host"
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.12.2",
     "@google-cloud/speech": "^7.3.1",
     "@tanstack/react-query": "^5.100.9",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-opener": "^2",
     "@types/sql.js": "^1.4.11",
     "better-auth": "^1.6.9",
@@ -26,7 +31,8 @@
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.15.0",
     "resend": "^6.12.2",
-    "sql.js": "^1.14.1"
+    "sql.js": "^1.14.1",
+    "tauri-plugin-widgets-api": "^0.3.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",

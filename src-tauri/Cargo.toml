@@ -20,6 +20,15 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+# Path dep: iOS setItems dual-writes App Group file + UserDefaults (widget reads both).
+tauri-plugin-widgets = { path = "../third_party/tauri-plugin-widgets" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tauri-plugin-deep-link = "2.4.9"
+
+# Production / device builds must enable this so the app loads bundled assets
+# instead of trying to fetch tauri://localhost (dev-server mode).
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
 

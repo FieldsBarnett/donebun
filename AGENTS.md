@@ -29,7 +29,7 @@ CONVEX_AGENT_MODE=anonymous npx convex env set BETTER_AUTH_SECRET "$(openssl ran
 CONVEX_AGENT_MODE=anonymous npx convex env set SITE_URL "http://localhost:1420"
 ```
 - `RESEND_API_KEY` only needs to be non-empty for dev (real email/verification is optional). `SITE_URL` must match the frontend origin so Better Auth trusts it. `CONVEX_SITE_URL` is auto-populated by the local backend.
-- Optional feature keys (unnecessary for core flows): `GROQ_API_KEY` (voice capture), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Google Calendar).
+- Optional feature keys (unnecessary for core flows): `GROQ_API_KEY` (voice capture), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Google Calendar). Password vault HTTP/CLI uses each user’s DoneBun email/password (see `docs/password-manager.md`).
 
 **Auth:** The whole app is gated behind Better Auth (email/password). Use the "Need an account? Sign up" flow to create a user; no email verification is required in dev.
 
@@ -62,3 +62,11 @@ Any new code that reads or writes virtual task IDs (mutations, queries, frontend
 2. Add the split date to `excludedDates` on the old root (hides that occurrence on the old root document and any virtual on that date).
 
 Setting only `endDate` leaves the old occurrence visible when `root.dueDate === splitDate`, or when a virtual on the split date was already expanded — you'll see duplicates alongside the new series root.
+
+### iOS widgets need App Group sync from the main app
+
+The WidgetKit extension reads JSON from App Group `group.app.donebun.ios`. Only the Tauri app writes that file (via `setWidgetConfig` / `setItems` in `src/lib/widgetSync.ts`) after the user signs in. The widget does not subscribe to Convex — if it looks blank or stale, open DoneBun on the device once. App Group IDs must match exactly on both the main app and widget extension targets in Xcode. See `docs/ios-widgets.md`.
+
+Calendar month dots + large-widget upcoming events live in `widget_calendar_month` (`upcomingEvents` embedded; also mirrored to `widget_calendar_events`). Upcoming is next 4 events within ~90 days (not month-bound). App Group writes go through a patched `tauri-plugin-widgets` (`third_party/…`) that dual-writes the shared file **and** App Group UserDefaults — file-only writes were silently failing on device, leaving Upcoming empty while the month grid still rendered from the device clock. Day taps write `timeline:YYYY-MM-DD` to `widget_open_action`. Task-list widgets use `widget_tasks` (upcoming by day, completed-last). Completions queue `widget_pending_completes` / JWT via `widget_auth_token`. Local list respects `widget_move_tasks_preference`.
+
+Open intents (`OpenTaskIntent`, `OpenTimelineDayIntent`, `OpenVoiceIntent`) use `openAppWhenRun = true` and must live in **`DoneBunShared/` compiled into both the app and widget extension**. Widget-only membership leaves interactive controls as yellow stop overlays and breaks title/day navigation.

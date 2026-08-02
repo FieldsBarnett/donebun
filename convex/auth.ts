@@ -22,6 +22,12 @@ function getResend(): Resend {
 const trustedOrigins = [
   "https://donebun.app",
   "https://www.donebun.app",
+  "http://localhost:1420",
+  "http://127.0.0.1:1420",
+  // Tauri iOS/Android/desktop WebView origins
+  "tauri://localhost",
+  "https://tauri.localhost",
+  "http://tauri.localhost",
 ];
 
 if (process.env.SITE_URL && !trustedOrigins.includes(process.env.SITE_URL)) {

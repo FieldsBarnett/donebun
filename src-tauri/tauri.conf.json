@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "DoneBun",
   "version": "0.1.0",
-  "identifier": "com.fieldsbarnett.tauri-app",
+  "identifier": "app.donebun.ios",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -24,6 +24,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "iOS": {
+      "developmentTeam": "JKU2537S8Z"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -31,5 +34,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["donebun"]
+      },
+      "mobile": [
+        { "scheme": ["donebun"] }
+      ]
+    }
   }
 }

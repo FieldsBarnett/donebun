@@ -13,3 +13,10 @@ These are tasks that require manual setup by the developer in various external d
     - [ ] Set `VITE_GOOGLE_CLIENT_ID` in `.env.local`.
     - [ ] Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in **Convex Dashboard** environment variables.
 - [ ] **Apple Developer Program**: Setup an Apple Developer account and provision certificates if building for iOS/macOS via Tauri.
+- [ ] **iOS widgets (family app)**:
+    - [ ] Enroll in Apple Developer Program ($99/yr)
+    - [ ] Collect UDIDs for every family iPhone; register at developer.apple.com
+    - [ ] Enable App Groups on App IDs: `app.donebun.ios` + widget extension
+    - [ ] Complete Xcode widget target setup (see `docs/ios-widgets.md`)
+    - [ ] Create Ad Hoc provisioning profile with all family device UDIDs
+    - [ ] Archive + export IPA; install on each phone; verify widget after sign-in

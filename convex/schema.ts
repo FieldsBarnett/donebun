@@ -14,7 +14,8 @@ export default defineSchema({
       pastDueTasks: v.optional(v.union(v.literal("today"), v.literal("past"), v.literal("timeline"))),
     })),
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
-    .index("by_family", ["familyId"]),
+    .index("by_family", ["familyId"])
+    .index("by_email", ["email"]),
 
   families: defineTable({
     name: v.string(),
@@ -105,4 +106,17 @@ export default defineSchema({
     .index("by_calendar", ["calendarId"])
     .index("by_googleEventId", ["googleEventId"])
     .index("by_start", ["start"]),
+
+  // Simple password vault (plaintext; master-key HTTP API can list all)
+  passwords: defineTable({
+    name: v.string(),
+    username: v.optional(v.string()),
+    password: v.string(),
+    url: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    ownerId: v.optional(v.id("users")),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_name", ["name"]),
 });

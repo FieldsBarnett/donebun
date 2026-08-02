@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeDevCommand": "npm run build:ios",
+    "beforeBuildCommand": "npm run build:ios:bundle",
+    "devUrl": null
+  }
+}

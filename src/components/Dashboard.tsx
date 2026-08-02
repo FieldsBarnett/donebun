@@ -6,6 +6,9 @@ import { TaskGroupedList } from "./TaskGroupedList";
 import SearchBar from "./SearchBar";
 import { parseDueDate, isSameDay, toLocalISOString } from "../lib/dateUtils";
 import { filterTasks, FilterMode } from "../lib/filterUtils";
+import {
+  getTodayTasks,
+} from "../lib/todayTasks";
 
 export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
   const currentUser = useQuery(api.users.getCurrentUser);
@@ -27,32 +30,26 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
   const tasks = useQuery(api.tasks.getTasks, { end }) || [];
   const updateTaskStatus = useMutation(api.tasks.updateTaskStatus);
 
-
   const today = new Date();
   const moveTasksPreference = currentUser?.preferences?.moveTasksToLogbook || "next_day";
+  const pastDueBehavior = currentUser?.preferences?.pastDueTasks || "today";
 
   const filteredTasks = filterTasks(tasks, currentUser, filterMode);
 
-  const isVisible = (t: any) => {
+  const isVisible = (t: (typeof tasks)[number]) => {
     if (t.status === "active") return true;
     if (t.status === "completed") {
       if (moveTasksPreference === "next_day") {
-        // Show if completed today
         return t.statusSet && isSameDay(new Date(t.statusSet), today);
       }
     }
     return false;
   };
 
-  const pastDueBehavior = currentUser?.preferences?.pastDueTasks || "today";
-
-  const todayTasks = filteredTasks.filter(t => {
-    if (!isVisible(t) || !t.dueDate) return false;
-    const date = parseDueDate(t.dueDate);
-    if (isSameDay(date, today)) return true;
-    if (date < today && t.status === "active" && pastDueBehavior === "today") return true;
-    return false;
-  });
+  const todayTasks = useMemo(
+    () => getTodayTasks(tasks, currentUser, filterMode, today),
+    [tasks, currentUser, filterMode, today]
+  );
   
   const overdueTasks = filteredTasks.filter(t => {
     if (!isVisible(t) || !t.dueDate) return false;

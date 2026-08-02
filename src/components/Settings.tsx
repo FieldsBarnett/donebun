@@ -5,12 +5,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import FamilySettings from "./FamilySettings";
 import AccountSettings from "./AccountSettings";
 import GoogleCalendarSettings from "./GoogleCalendarSettings";
+import PasswordManager from "./PasswordManager";
 import Logbook from "./Logbook";
-import { User, Users, Calendar, ChevronRight, ChevronLeft, BookOpen, Settings2, Check, Database } from "lucide-react";
+import { User, Users, Calendar, ChevronRight, ChevronLeft, BookOpen, Settings2, Check, Database, KeyRound } from "lucide-react";
 import { FilterMode } from "../lib/filterUtils";
 import ImportData from "./ImportData";
 
-type SettingsView = "main" | "family" | "calendar" | "account" | "logbook" | "preferences" | "import";
+type SettingsView = "main" | "family" | "calendar" | "account" | "logbook" | "preferences" | "import" | "passwords";
 
 export default function Settings({ filterMode }: { filterMode: FilterMode }) {
   const [view, setView] = useState<SettingsView>(() => {
@@ -92,6 +93,11 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
                 icon={<Database size={22} className="text-[#ff9500]" />}
                 title="Data & Import"
                 onClick={() => setView("import")}
+              />
+              <SettingsGroup 
+                icon={<KeyRound size={22} className="text-[#5856d6]" />}
+                title="Passwords"
+                onClick={() => setView("passwords")}
               />
             </div>
           </motion.div>
@@ -280,6 +286,21 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
             className="absolute inset-0"
           >
             <ImportData onBack={() => setView("main")} />
+          </motion.div>
+        )}
+
+        {view === "passwords" && (
+          <motion.div
+            key="passwords"
+            custom={1}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute inset-0"
+          >
+            <PasswordManager onBack={() => setView("main")} />
           </motion.div>
         )}
       </AnimatePresence>

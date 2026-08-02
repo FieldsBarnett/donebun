@@ -219,16 +219,32 @@ export const updateTaskStatus = mutation({
     status: v.union(v.literal("active"), v.literal("completed"), v.literal("deleted")),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+    if (!user?.familyId) throw new Error("User or family not found");
+
     const { taskId, virtualDate, isVirtual } = parseVirtualTaskId(args.id);
     const task = await ctx.db.get(taskId as Id<"tasks">);
-    if (!task) return;
+    if (!task) throw new Error("Task not found");
+    if (task.familyId !== user.familyId) throw new Error("Unauthorized");
+
+    const canComplete =
+      task.assigneeId === user._id ||
+      (!task.assigneeId && !task.isPrivate) ||
+      (task.isPrivate && task.ownerId === user._id);
+    if (!canComplete) throw new Error("Unauthorized");
 
     if (isVirtual && task.recurrence && virtualDate) {
       await materializeVirtualTask(ctx as any, task, virtualDate, { status: args.status });
     } else {
       const wasCompleted = task.status === "completed";
-      
-      await ctx.db.patch(task._id, { 
+
+      await ctx.db.patch(task._id, {
         status: args.status,
         statusSet: Date.now(),
       });

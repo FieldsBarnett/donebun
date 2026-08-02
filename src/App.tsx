@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
-import { useConvexAuth, useMutation } from "convex/react";
-import { authClient } from "./lib/auth-client";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { signInWithEmail, signUpWithEmail } from "./lib/auth-client";
 import Dashboard from "./components/Dashboard";
 import Timeline from "./components/Timeline";
 import CalendarView from "./components/CalendarView";
@@ -15,6 +15,19 @@ import AssignmentNotificationPopup from "./components/AssignmentNotificationPopu
 import { api } from "../convex/_generated/api";
 import { Users, User, LayoutDashboard, CalendarDays, Calendar, Inbox, Settings as SettingsIcon, BookOpen, Plus, Mic as MicIcon, X } from "lucide-react";
 import { FilterMode } from "./lib/filterUtils";
+import { getWidgetTasks, toTodayTaskItems } from "./lib/todayTasks";
+import {
+  buildCalendarMonthSnapshot,
+  getUpcomingCalendarEvents,
+} from "./lib/calendarMonth";
+import { toDateKey, toLocalISOString } from "./lib/dateUtils";
+import {
+  dispatchOpenVoice,
+  setupWidgetActionHandlers,
+  setupWidgetOpenActionHandlers,
+  syncTodayWidget,
+  OPEN_VOICE_EVENT,
+} from "./lib/widgetSync";
 
 /**
  * Thin redirect page for the Google OAuth callback.
@@ -66,6 +79,27 @@ function Layout({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isQuickEntryOpen]);
+
+  const startVoiceQuickAdd = () => {
+    setVoiceOpen(true);
+    // Widget cold-start can mount VoiceEntry a beat later — retry until ready.
+    const tryStart = (attempt: number) => {
+      if (voiceEntryRef.current) {
+        voiceEntryRef.current.startRecording();
+        return;
+      }
+      if (attempt < 40) {
+        setTimeout(() => tryStart(attempt + 1), 75);
+      }
+    };
+    setTimeout(() => tryStart(0), 100);
+  };
+
+  useEffect(() => {
+    const onVoiceFromWidget = () => startVoiceQuickAdd();
+    window.addEventListener(OPEN_VOICE_EVENT, onVoiceFromWidget);
+    return () => window.removeEventListener(OPEN_VOICE_EVENT, onVoiceFromWidget);
+  }, []);
 
   return (
     <div className="flex h-[100dvh] bg-[var(--color-canvas)] text-[var(--color-ink)] flex-col md:flex-row font-system overflow-hidden">
@@ -181,9 +215,7 @@ function Layout({
         <button
           onPointerDown={(e) => {
             e.preventDefault();
-            setVoiceOpen(true);
-            // Small delay to let VoiceEntry mount before we signal it
-            setTimeout(() => voiceEntryRef.current?.startRecording(), 50);
+            startVoiceQuickAdd();
           }}
           onPointerUp={() => {
             if (voiceEntryRef.current?.isRecording) {
@@ -233,10 +265,60 @@ function Layout({
 
 function AppContent() {
   const storeUser = useMutation(api.users.store);
+  const updateTaskStatus = useMutation(api.tasks.updateTaskStatus);
+  const currentUser = useQuery(api.users.getCurrentUser);
+  // Stable per calendar month so we always cover days still in this month.
+  const monthKey = toDateKey(new Date()).slice(0, 7);
+  const widgetQueryEnd = useMemo(() => {
+    const now = new Date();
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const weekAhead = new Date(now);
+    weekAhead.setDate(weekAhead.getDate() + 7);
+    weekAhead.setHours(23, 59, 59, 0);
+    const end = endOfMonth > weekAhead ? endOfMonth : weekAhead;
+    // Local ISO (no Z) — matches stored dueDate string ordering in Convex.
+    return toLocalISOString(end, true);
+  }, [monthKey]);
+  const tasks = useQuery(api.tasks.getTasks, { end: widgetQueryEnd }) || [];
+  const widgetEventsQueryStart = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    return toLocalISOString(start, false);
+  }, [monthKey]);
+  // Far enough ahead that "next 4" isn't clipped by end-of-month.
+  const widgetEventsQueryEnd = useMemo(() => {
+    const end = new Date();
+    end.setDate(end.getDate() + 90);
+    end.setHours(23, 59, 59, 0);
+    return toLocalISOString(end, true);
+  }, [monthKey]);
+  const calendarEventsQuery = useQuery(api.calendars.getEventsByFamily, {
+    start: widgetEventsQueryStart,
+    end: widgetEventsQueryEnd,
+  });
+  const allCalendarEvents = calendarEventsQuery ?? [];
+  const calendarEventsReady = calendarEventsQuery !== undefined;
+  const moveTasksPreference =
+    currentUser?.preferences?.moveTasksToLogbook || "next_day";
   const [filterMode, setFilterMode] = useState<FilterMode>(() => {
     const saved = localStorage.getItem("donebun_filter_mode") as FilterMode;
     return (["personal", "family", "everyone"].includes(saved)) ? saved : "personal";
   });
+  const widgetTasks = useMemo(
+    () => toTodayTaskItems(getWidgetTasks(tasks, currentUser, "personal")),
+    [tasks, currentUser]
+  );
+  // Match Timeline/Calendar visibility (everyone shows all family calendars).
+  const widgetCalendarEvents = useMemo(
+    () => getUpcomingCalendarEvents(allCalendarEvents, currentUser, filterMode, 4),
+    [allCalendarEvents, currentUser, filterMode]
+  );
+  const widgetCalendar = useMemo(() => {
+    const base = buildCalendarMonthSnapshot(tasks, currentUser, "personal");
+    // Only attach once the Convex query has resolved so we don't wipe a prior sync with [].
+    if (!calendarEventsReady) return base;
+    return { ...base, upcomingEvents: widgetCalendarEvents };
+  }, [tasks, currentUser, calendarEventsReady, widgetCalendarEvents]);
 
   useEffect(() => {
     localStorage.setItem("donebun_filter_mode", filterMode);
@@ -246,6 +328,48 @@ function AppContent() {
   useEffect(() => {
     storeUser().catch(console.error);
   }, [storeUser]);
+
+  useEffect(() => {
+    // Wait for calendar events query before writing the month snapshot so we
+    // don't overwrite a prior upcomingEvents list with a grid-only payload.
+    const calendarReady = !currentUser || calendarEventsReady;
+    void syncTodayWidget(widgetTasks, Boolean(currentUser), {
+      calendar: calendarReady ? widgetCalendar : undefined,
+      calendarEvents: calendarEventsReady ? widgetCalendarEvents : undefined,
+      moveTasksPreference,
+    });
+  }, [
+    widgetTasks,
+    widgetCalendar,
+    widgetCalendarEvents,
+    calendarEventsReady,
+    currentUser,
+    moveTasksPreference,
+  ]);
+
+  useEffect(() => {
+    return setupWidgetActionHandlers(
+      async (taskId, status) => {
+        await updateTaskStatus({ id: taskId, status });
+      },
+      () => {
+        const calendarReady = !currentUser || calendarEventsReady;
+        void syncTodayWidget(widgetTasks, Boolean(currentUser), {
+          calendar: calendarReady ? widgetCalendar : undefined,
+          calendarEvents: calendarEventsReady ? widgetCalendarEvents : undefined,
+          moveTasksPreference,
+        });
+      }
+    );
+  }, [
+    updateTaskStatus,
+    widgetTasks,
+    widgetCalendar,
+    widgetCalendarEvents,
+    calendarEventsReady,
+    currentUser,
+    moveTasksPreference,
+  ]);
 
   const toggleFilter = () => {
     setFilterMode(prev => {
@@ -257,6 +381,7 @@ function AppContent() {
 
   return (
     <BrowserRouter>
+      <WidgetDeepLinkBridge />
       <Layout filterMode={filterMode} onToggleFilter={toggleFilter}>
         <Routes>
           <Route path="/" element={<Dashboard filterMode={filterMode} />} />
@@ -273,17 +398,56 @@ function AppContent() {
   );
 }
 
+/**
+ * Handles widget → app navigation. Open-action polling lives here (not in AppContent)
+ * so timeline navigation can't race ahead of the router listener.
+ */
+function WidgetDeepLinkBridge() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    return setupWidgetOpenActionHandlers({
+      onVoice: dispatchOpenVoice,
+      onTimelineDay: (date) => {
+        navigate(`/timeline?date=${date}`, { replace: true });
+      },
+      onOpenTask: (taskId, dateKey) => {
+        if (dateKey) {
+          navigate(
+            `/timeline?date=${dateKey}&taskId=${encodeURIComponent(taskId)}`,
+            { replace: true }
+          );
+        } else {
+          navigate(`/?taskId=${encodeURIComponent(taskId)}`, { replace: true });
+        }
+      },
+    });
+  }, [navigate]);
+
+  return null;
+}
+
 function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSignUp) {
-      await authClient.signUp.email({ email, password, name: email.split("@")[0] });
-    } else {
-      await authClient.signIn.email({ email, password });
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      if (isSignUp) {
+        await signUpWithEmail(email, password, email.split("@")[0] ?? email);
+      } else {
+        await signInWithEmail(email, password);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -311,11 +475,15 @@ function SignIn() {
           />
           <button 
             type="submit" 
-            className="bg-[var(--color-primary)] text-white font-medium px-6 py-2.5 rounded-lg w-full hover:bg-[#005bb5] transition-colors mt-2"
+            disabled={isSubmitting}
+            className="bg-[var(--color-primary)] text-white font-medium px-6 py-2.5 rounded-lg w-full hover:bg-[#005bb5] transition-colors mt-2 disabled:opacity-60"
           >
-            {isSignUp ? "Sign Up" : "Sign In"}
+            {isSubmitting ? "Please wait…" : isSignUp ? "Sign Up" : "Sign In"}
           </button>
         </form>
+        {error ? (
+          <p className="text-sm text-red-600 mt-4 text-center">{error}</p>
+        ) : null}
         <button 
           onClick={() => setIsSignUp(!isSignUp)}
           className="text-sm text-[var(--color-muted)] mt-6 hover:text-black transition-colors"

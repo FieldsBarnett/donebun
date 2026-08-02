@@ -313,7 +313,7 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
   // ── Recording ───────────────────────────────────────────────────────────────
 
   const startRecording = useCallback(async () => {
-    if (isRecording) return;
+    if (isRecording || mediaRecorderRef.current) return;
     try {
       setError(null);
       isCancellingRef.current = false;
