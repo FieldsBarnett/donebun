@@ -115,8 +115,11 @@ export default defineSchema({
     url: v.optional(v.string()),
     notes: v.optional(v.string()),
     ownerId: v.optional(v.id("users")),
+    familyId: v.optional(v.id("families")),
+    isPrivate: v.optional(v.boolean()),
     updatedAt: v.number(),
   })
     .index("by_owner", ["ownerId"])
+    .index("by_family", ["familyId"])
     .index("by_name", ["name"]),
 });

@@ -300,7 +300,7 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="absolute inset-0"
           >
-            <PasswordManager onBack={() => setView("main")} />
+            <PasswordManager onBack={() => setView("main")} filterMode={filterMode} />
           </motion.div>
         )}
       </AnimatePresence>

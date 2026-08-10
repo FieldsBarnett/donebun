@@ -6,6 +6,7 @@ import {
   query,
 } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 
 const passwordFields = {
   name: v.string(),
@@ -13,6 +14,7 @@ const passwordFields = {
   password: v.string(),
   url: v.optional(v.string()),
   notes: v.optional(v.string()),
+  isPrivate: v.optional(v.boolean()),
 };
 
 const passwordDoc = v.object({
@@ -24,6 +26,8 @@ const passwordDoc = v.object({
   url: v.optional(v.string()),
   notes: v.optional(v.string()),
   ownerId: v.optional(v.id("users")),
+  familyId: v.optional(v.id("families")),
+  isPrivate: v.optional(v.boolean()),
   updatedAt: v.number(),
 });
 
@@ -54,6 +58,7 @@ function buildPatch(args: {
   password?: string;
   url?: string;
   notes?: string;
+  isPrivate?: boolean;
 }) {
   const patch: {
     name?: string;
@@ -61,6 +66,7 @@ function buildPatch(args: {
     password?: string;
     url?: string;
     notes?: string;
+    isPrivate?: boolean;
     updatedAt: number;
   } = { updatedAt: Date.now() };
 
@@ -82,11 +88,40 @@ function buildPatch(args: {
   if (args.notes !== undefined) {
     patch.notes = args.notes.trim() || undefined;
   }
+  if (args.isPrivate !== undefined) {
+    patch.isPrivate = args.isPrivate;
+  }
 
   return patch;
 }
 
-/** List passwords owned by the signed-in user. */
+async function listVisibleForUser(ctx: QueryCtx, user: Doc<"users">) {
+  const byId = new Map<Id<"passwords">, Doc<"passwords">>();
+
+  if (user.familyId) {
+    const familyPasswords = await ctx.db
+      .query("passwords")
+      .withIndex("by_family", (q) => q.eq("familyId", user.familyId))
+      .collect();
+    for (const entry of familyPasswords) {
+      byId.set(entry._id, entry);
+    }
+  }
+
+  const owned = await ctx.db
+    .query("passwords")
+    .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+    .collect();
+  for (const entry of owned) {
+    byId.set(entry._id, entry);
+  }
+
+  return [...byId.values()].filter(
+    (entry) => !(entry.isPrivate ?? false) || entry.ownerId === user._id,
+  );
+}
+
+/** List passwords visible to the signed-in user (family + privacy rules). */
 export const list = query({
   args: {},
   returns: v.array(passwordDoc),
@@ -102,10 +137,7 @@ export const list = query({
       .unique();
     if (!user) return [];
 
-    return await ctx.db
-      .query("passwords")
-      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-      .collect();
+    return await listVisibleForUser(ctx, user);
   },
 });
 
@@ -126,6 +158,8 @@ export const create = mutation({
       url: args.url?.trim() || undefined,
       notes: args.notes?.trim() || undefined,
       ownerId: user._id,
+      familyId: user.familyId,
+      isPrivate: args.isPrivate ?? false,
       updatedAt: Date.now(),
     });
   },
@@ -140,6 +174,7 @@ export const update = mutation({
     password: v.optional(v.string()),
     url: v.optional(v.string()),
     notes: v.optional(v.string()),
+    isPrivate: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -180,7 +215,6 @@ export const getUserByEmailInternal = internalQuery({
       .withIndex("by_email", (q) => q.eq("email", email))
       .unique();
     if (!user) {
-      // Email casing may differ from signup; fall back once.
       const all = await ctx.db.query("users").collect();
       const match = all.find((u) => u.email.toLowerCase() === email);
       if (!match) return null;
@@ -194,10 +228,10 @@ export const listForOwnerInternal = internalQuery({
   args: { ownerId: v.id("users") },
   returns: v.array(passwordDoc),
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query("passwords")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .collect();
+    const user = await ctx.db.get(args.ownerId);
+    if (!user) return [];
+
+    return await listVisibleForUser(ctx, user);
   },
 });
 
@@ -209,7 +243,11 @@ export const getForOwnerInternal = internalQuery({
   returns: v.union(passwordDoc, v.null()),
   handler: async (ctx, args) => {
     const entry = await ctx.db.get(args.id);
-    if (!entry || entry.ownerId !== args.ownerId) return null;
+    if (!entry) return null;
+    if (entry.ownerId !== args.ownerId) return null;
+    if ((entry.isPrivate ?? false) && entry.ownerId !== args.ownerId) {
+      return null;
+    }
     return entry;
   },
 });
@@ -225,6 +263,9 @@ export const createForOwnerInternal = internalMutation({
     if (!name) throw new Error("Name is required");
     if (!args.password) throw new Error("Password is required");
 
+    const owner = await ctx.db.get(args.ownerId);
+    if (!owner) throw new Error("User not found");
+
     return await ctx.db.insert("passwords", {
       name,
       username: args.username?.trim() || undefined,
@@ -232,6 +273,8 @@ export const createForOwnerInternal = internalMutation({
       url: args.url?.trim() || undefined,
       notes: args.notes?.trim() || undefined,
       ownerId: args.ownerId,
+      familyId: owner.familyId,
+      isPrivate: args.isPrivate ?? false,
       updatedAt: Date.now(),
     });
   },
@@ -246,6 +289,7 @@ export const updateForOwnerInternal = internalMutation({
     password: v.optional(v.string()),
     url: v.optional(v.string()),
     notes: v.optional(v.string()),
+    isPrivate: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {

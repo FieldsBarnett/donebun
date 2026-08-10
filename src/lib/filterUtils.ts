@@ -30,6 +30,27 @@ export function filterTasks(tasks: any[], currentUser: any, filterMode: FilterMo
 /**
  * Common filtering logic for calendar events based on assignment.
  */
+export function filterPasswords<T extends { ownerId?: string; isPrivate?: boolean }>(
+  passwords: T[],
+  currentUser: { _id: string } | null | undefined,
+  filterMode: FilterMode,
+): T[] {
+  if (!currentUser) return [];
+
+  return passwords.filter((p) => {
+    const isPrivate = p.isPrivate ?? false;
+    const isVisibleToMe = !isPrivate || p.ownerId === currentUser._id;
+    if (!isVisibleToMe) return false;
+
+    if (filterMode === "personal") {
+      return p.ownerId === currentUser._id;
+    }
+
+    // Family and everyone: all passwords visible to the current user
+    return true;
+  });
+}
+
 export function filterCalendarEvents(events: any[], currentUser: any, filterMode: FilterMode) {
   if (!currentUser) return [];
 
