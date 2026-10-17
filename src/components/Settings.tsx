@@ -96,7 +96,7 @@ export default function Settings({ filterMode }: { filterMode: FilterMode }) {
               />
               <SettingsGroup 
                 icon={<KeyRound size={22} className="text-[#5856d6]" />}
-                title="Passwords"
+                title="Passwords & keys"
                 onClick={() => setView("passwords")}
               />
             </div>

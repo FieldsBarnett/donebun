@@ -25,12 +25,16 @@ interface PasswordManagerProps {
   filterMode: FilterMode;
 }
 
+type EntryKind = "password" | "api_key";
+type KindFilter = "all" | EntryKind;
+
 type FormState = {
   name: string;
   username: string;
   password: string;
   url: string;
   notes: string;
+  kind: EntryKind;
   isPrivate: boolean;
 };
 
@@ -40,11 +44,16 @@ const emptyForm: FormState = {
   password: "",
   url: "",
   notes: "",
+  kind: "password",
   isPrivate: false,
 };
 
+function entryKind(kind: string | undefined): EntryKind {
+  return kind === "api_key" ? "api_key" : "password";
+}
+
 export default function PasswordManager({ onBack, filterMode }: PasswordManagerProps) {
-  const passwords = useQuery(api.passwords.list);
+  const passwords = useQuery(api.passwords.list, {});
   const currentUser = useQuery(api.users.getCurrentUser);
   const familyMembers = useQuery(api.users.getMyFamilyMembers) ?? [];
   const createPassword = useMutation(api.passwords.create);
@@ -58,6 +67,7 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
 
   const memberNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -72,23 +82,30 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
 
   const filteredPasswords = useMemo(() => {
     if (!passwords) return undefined;
-    const modeFiltered = filterPasswords(passwords, currentUser, filterMode);
+    const modeFiltered = filterPasswords(passwords, currentUser, filterMode).filter(
+      (entry) => kindFilter === "all" || entryKind(entry.kind) === kindFilter,
+    );
     const query = searchQuery.trim();
     if (!query) return modeFiltered;
 
     return modeFiltered
       .map((entry) => ({
         entry,
-        score: fuzzyScoreFields(query, [entry.name, entry.url, entry.notes]),
+        score: fuzzyScoreFields(query, [
+          entry.name,
+          entry.username,
+          entry.url,
+          entry.notes,
+        ]),
       }))
       .filter((result) => result.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((result) => result.entry);
-  }, [passwords, currentUser, filterMode, searchQuery]);
+  }, [passwords, currentUser, filterMode, searchQuery, kindFilter]);
 
-  const openCreate = () => {
+  const openCreate = (kind: EntryKind = "password") => {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, kind });
     setError(null);
     setShowForm(true);
   };
@@ -100,6 +117,7 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
     password: string;
     url?: string;
     notes?: string;
+    kind?: string;
     isPrivate?: boolean;
   }) => {
     setEditingId(entry._id);
@@ -109,6 +127,7 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
       password: entry.password,
       url: entry.url ?? "",
       notes: entry.notes ?? "",
+      kind: entryKind(entry.kind),
       isPrivate: entry.isPrivate ?? false,
     });
     setError(null);
@@ -127,6 +146,7 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
           password: form.password,
           url: form.url,
           notes: form.notes,
+          kind: form.kind,
           isPrivate: form.isPrivate,
         });
       } else {
@@ -136,6 +156,7 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
           password: form.password,
           url: form.url || undefined,
           notes: form.notes || undefined,
+          kind: form.kind,
           isPrivate: form.isPrivate,
         });
       }
@@ -150,7 +171,9 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
   };
 
   const handleDelete = async (id: Id<"passwords">) => {
-    if (!confirm("Delete this password?")) return;
+    const entry = passwords?.find((item) => item._id === id);
+    const label = entryKind(entry?.kind) === "api_key" ? "API key" : "password";
+    if (!confirm(`Delete this ${label}?`)) return;
     try {
       await removePassword({ id });
     } catch (err) {
@@ -196,11 +219,11 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
         >
           <ChevronLeft size={24} />
         </button>
-        <h2 className="text-xl font-bold tracking-tight flex-1">Passwords</h2>
+        <h2 className="text-xl font-bold tracking-tight flex-1">Passwords & keys</h2>
         <button
-          onClick={openCreate}
+          onClick={() => openCreate(kindFilter === "api_key" ? "api_key" : "password")}
           className="p-2 rounded-full bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
-          aria-label="Add password"
+          aria-label={kindFilter === "api_key" ? "Add API key" : "Add password"}
         >
           <Plus size={20} />
         </button>
@@ -213,7 +236,7 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search name, website, notes…"
+            placeholder="Search name, account, website, notes…"
             className="flex-1 bg-transparent outline-none text-[15px] text-[var(--color-ink)] placeholder-[var(--color-muted)] min-w-0"
           />
           {searchQuery && (
@@ -225,6 +248,29 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
               <X size={15} />
             </button>
           )}
+        </div>
+
+        <div className="flex gap-2">
+          {(
+            [
+              ["all", "All"],
+              ["password", "Passwords"],
+              ["api_key", "API keys"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setKindFilter(value)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                kindFilter === value
+                  ? "bg-[var(--color-primary)] text-white"
+                  : "bg-[var(--color-surface-soft)] text-[var(--color-muted)]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
@@ -242,7 +288,11 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
           )}
           <span>
             Showing <span className="font-medium text-[var(--color-ink)]">{filterLabel}</span>{" "}
-            passwords
+            {kindFilter === "api_key"
+              ? "API keys"
+              : kindFilter === "password"
+                ? "passwords"
+                : "passwords and API keys"}
             {filteredPasswords !== undefined && (
               <span> ({filteredPasswords.length})</span>
             )}
@@ -260,22 +310,24 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
             <KeyRound size={40} className="mx-auto text-[var(--color-muted)]" />
             <p className="font-medium">
               {searchQuery.trim()
-                ? "No matching passwords"
-                : filterMode === "personal"
-                  ? "No personal passwords yet"
-                  : "No shared passwords yet"}
+                ? "Nothing matches"
+                : kindFilter === "api_key"
+                  ? "No API keys yet"
+                  : filterMode === "personal"
+                    ? "Nothing saved yet"
+                    : "No shared entries yet"}
             </p>
             <p className="text-sm text-[var(--color-muted)]">
               {searchQuery.trim()
                 ? "Try a different search term."
-                : "Store logins here, or use the API / CLI with your DoneBun login."}
+                : "Store logins and API keys here, or fetch them with the API / CLI."}
             </p>
             {!searchQuery.trim() && (
               <button
-                onClick={openCreate}
+                onClick={() => openCreate(kindFilter === "api_key" ? "api_key" : "password")}
                 className="mt-2 px-4 py-2 rounded-2xl bg-[var(--color-primary)] text-white text-sm font-medium"
               >
-                Add password
+                {kindFilter === "api_key" ? "Add API key" : "Add password"}
               </button>
             )}
           </div>
@@ -284,6 +336,7 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
         {filteredPasswords?.map((entry) => {
           const isRevealed = !!revealed[entry._id];
           const isPrivate = entry.isPrivate ?? false;
+          const isApiKey = entryKind(entry.kind) === "api_key";
           const isOwner = entry.ownerId === currentUser?._id;
           const ownerName = entry.ownerId
             ? memberNameById.get(entry.ownerId)
@@ -301,10 +354,15 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
                       <EyeOff
                         size={16}
                         className="text-[var(--color-primary)] shrink-0"
-                        aria-label="Private password"
+                        aria-label={isApiKey ? "Private API key" : "Private password"}
                       />
                     )}
                     <h3 className="font-bold text-lg truncate">{entry.name}</h3>
+                    {isApiKey && (
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--color-surface-soft)] text-[var(--color-muted)]">
+                        API key
+                      </span>
+                    )}
                   </div>
                   {ownerName && !isOwner && filterMode !== "personal" && (
                     <p className="text-xs text-[var(--color-muted)] mt-0.5">
@@ -377,14 +435,22 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
                     }))
                   }
                   className="p-1.5 text-[var(--color-muted)] hover:text-black"
-                  aria-label={isRevealed ? "Hide password value" : "Show password value"}
+                  aria-label={
+                    isRevealed
+                      ? isApiKey
+                        ? "Hide API key"
+                        : "Hide password"
+                      : isApiKey
+                        ? "Show API key"
+                        : "Show password"
+                  }
                 >
                   {isRevealed ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
                 <button
                   onClick={() => copyText(entry.password)}
                   className="p-1.5 text-[var(--color-muted)] hover:text-black"
-                  aria-label="Copy password"
+                  aria-label={isApiKey ? "Copy API key" : "Copy password"}
                 >
                   <Copy size={16} />
                 </button>
@@ -404,7 +470,13 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
         <div className="bg-white rounded-2xl shadow-2xl border border-[var(--color-hairline)] overflow-hidden max-h-[85dvh] flex flex-col">
           <div className="px-6 py-4 border-b border-[var(--color-hairline)] flex items-center justify-between shrink-0">
             <h3 className="text-lg font-bold">
-              {editingId ? "Edit password" : "New password"}
+              {editingId
+                ? form.kind === "api_key"
+                  ? "Edit API key"
+                  : "Edit password"
+                : form.kind === "api_key"
+                  ? "New API key"
+                  : "New password"}
             </h3>
             <button
               onClick={() => setShowForm(false)}
@@ -415,11 +487,42 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
           </div>
 
           <div className="px-6 py-6 space-y-4 overflow-y-auto">
+            <div className="flex gap-2">
+              {(
+                [
+                  ["password", "Password"],
+                  ["api_key", "API key"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, kind: value }))}
+                  className={`flex-1 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+                    form.kind === value
+                      ? "bg-[var(--color-primary)] text-white"
+                      : "bg-[var(--color-surface-soft)] text-[var(--color-muted)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             {(
               [
-                ["name", "Name", "text", "GitHub"],
-                ["username", "Username / email", "text", "you@example.com"],
-                ["password", "Password", "text", "••••••••"],
+                ["name", "Name", "text", form.kind === "api_key" ? "OpenAI" : "GitHub"],
+                [
+                  "username",
+                  form.kind === "api_key" ? "Account label" : "Username / email",
+                  "text",
+                  form.kind === "api_key" ? "prod" : "you@example.com",
+                ],
+                [
+                  "password",
+                  form.kind === "api_key" ? "API key" : "Password",
+                  "text",
+                  form.kind === "api_key" ? "sk-…" : "••••••••",
+                ],
                 ["url", "URL", "url", "https://…"],
               ] as const
             ).map(([key, label, type, placeholder]) => (
@@ -458,7 +561,9 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
               <div>
                 <p className="text-sm font-medium">Private</p>
                 <p className="text-xs text-[var(--color-muted)]">
-                  Only you can see this password
+                  {form.kind === "api_key"
+                    ? "Only you can see this API key"
+                    : "Only you can see this password"}
                 </p>
               </div>
               <button
@@ -484,7 +589,13 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
               disabled={saving || !form.name.trim() || !form.password}
               className="w-full py-3 rounded-2xl bg-[var(--color-primary)] text-white font-medium disabled:opacity-50"
             >
-              {saving ? "Saving…" : editingId ? "Save changes" : "Add password"}
+              {saving
+                ? "Saving…"
+                : editingId
+                  ? "Save changes"
+                  : form.kind === "api_key"
+                    ? "Add API key"
+                    : "Add password"}
             </button>
           </div>
         </div>

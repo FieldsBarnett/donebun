@@ -107,6 +107,33 @@ function requireString(value: unknown, field: string): string {
   return value;
 }
 
+function optionalKind(value: unknown): "password" | "api_key" | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (value === "password" || value === "api_key") return value;
+  throw new Error("kind must be password or api_key");
+}
+
+function parseKindFilter(value: string | null): "password" | "api_key" | undefined {
+  if (!value) return undefined;
+  return optionalKind(value);
+}
+
+/** Secret lives in `password`. `apiKey` is an alias and implies kind api_key when kind is omitted. */
+function secretAndKind(body: Record<string, unknown>, required: boolean) {
+  const password = optionalString(body.password);
+  const apiKey = optionalString(body.apiKey);
+  const explicitKind = optionalKind(body.kind);
+  const secret = password !== undefined && password !== "" ? password : apiKey;
+  let kind = explicitKind;
+  if (!kind && apiKey !== undefined && apiKey !== "" && (password === undefined || password === "")) {
+    kind = "api_key";
+  }
+  if (required && (secret === undefined || !secret.trim())) {
+    throw new Error("password is required");
+  }
+  return { password: secret, kind };
+}
+
 const corsOptions = httpAction(async () => {
   return new Response(null, {
     status: 204,
@@ -132,8 +159,10 @@ http.route({
     const authResult = await requireDoneBunUser(ctx, req);
     if (authResult instanceof Response) return authResult;
 
+    const kind = parseKindFilter(new URL(req.url).searchParams.get("kind"));
     const passwords = await ctx.runQuery(internal.passwords.listForOwnerInternal, {
       ownerId: authResult.ownerId,
+      kind,
     });
     return json({ passwords });
   }),
@@ -149,13 +178,15 @@ http.route({
 
     try {
       const body = await readJsonBody(req);
+      const secret = secretAndKind(body, true);
       const id = await ctx.runMutation(internal.passwords.createForOwnerInternal, {
         ownerId: authResult.ownerId,
         name: requireString(body.name, "name"),
-        password: requireString(body.password, "password"),
+        password: secret.password!,
         username: optionalString(body.username),
         url: optionalString(body.url),
         notes: optionalString(body.notes),
+        kind: secret.kind,
       });
       const entry = await ctx.runQuery(internal.passwords.getForOwnerInternal, {
         id,
@@ -212,14 +243,16 @@ http.route({
 
     try {
       const body = await readJsonBody(req);
+      const secret = secretAndKind(body, false);
       await ctx.runMutation(internal.passwords.updateForOwnerInternal, {
         id: id as Id<"passwords">,
         ownerId: authResult.ownerId,
         name: optionalString(body.name),
         username: optionalString(body.username),
-        password: optionalString(body.password),
+        password: secret.password,
         url: optionalString(body.url),
         notes: optionalString(body.notes),
+        kind: secret.kind,
       });
       const entry = await ctx.runQuery(internal.passwords.getForOwnerInternal, {
         id: id as Id<"passwords">,

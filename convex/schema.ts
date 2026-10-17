@@ -107,13 +107,14 @@ export default defineSchema({
     .index("by_googleEventId", ["googleEventId"])
     .index("by_start", ["start"]),
 
-  // Simple password vault (plaintext; master-key HTTP API can list all)
+  // Simple secrets vault (plaintext). kind defaults to password for older rows.
   passwords: defineTable({
     name: v.string(),
     username: v.optional(v.string()),
     password: v.string(),
     url: v.optional(v.string()),
     notes: v.optional(v.string()),
+    kind: v.optional(v.union(v.literal("password"), v.literal("api_key"))),
     ownerId: v.optional(v.id("users")),
     familyId: v.optional(v.id("families")),
     isPrivate: v.optional(v.boolean()),

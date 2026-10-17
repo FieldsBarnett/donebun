@@ -8,12 +8,15 @@ import {
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
+const entryKind = v.union(v.literal("password"), v.literal("api_key"));
+
 const passwordFields = {
   name: v.string(),
   username: v.optional(v.string()),
   password: v.string(),
   url: v.optional(v.string()),
   notes: v.optional(v.string()),
+  kind: v.optional(entryKind),
   isPrivate: v.optional(v.boolean()),
 };
 
@@ -25,6 +28,7 @@ const passwordDoc = v.object({
   password: v.string(),
   url: v.optional(v.string()),
   notes: v.optional(v.string()),
+  kind: v.optional(entryKind),
   ownerId: v.optional(v.id("users")),
   familyId: v.optional(v.id("families")),
   isPrivate: v.optional(v.boolean()),
@@ -52,12 +56,21 @@ async function requireUser(ctx: QueryCtx | MutationCtx) {
   return user;
 }
 
+type EntryKind = "password" | "api_key";
+
+function normalizeKind(kind: string | undefined): EntryKind {
+  if (kind === undefined || kind === "password") return "password";
+  if (kind === "api_key") return "api_key";
+  throw new Error("kind must be password or api_key");
+}
+
 function buildPatch(args: {
   name?: string;
   username?: string;
   password?: string;
   url?: string;
   notes?: string;
+  kind?: EntryKind;
   isPrivate?: boolean;
 }) {
   const patch: {
@@ -66,6 +79,7 @@ function buildPatch(args: {
     password?: string;
     url?: string;
     notes?: string;
+    kind?: EntryKind;
     isPrivate?: boolean;
     updatedAt: number;
   } = { updatedAt: Date.now() };
@@ -87,6 +101,9 @@ function buildPatch(args: {
   }
   if (args.notes !== undefined) {
     patch.notes = args.notes.trim() || undefined;
+  }
+  if (args.kind !== undefined) {
+    patch.kind = normalizeKind(args.kind);
   }
   if (args.isPrivate !== undefined) {
     patch.isPrivate = args.isPrivate;
@@ -123,9 +140,9 @@ async function listVisibleForUser(ctx: QueryCtx, user: Doc<"users">) {
 
 /** List passwords visible to the signed-in user (family + privacy rules). */
 export const list = query({
-  args: {},
+  args: { kind: v.optional(entryKind) },
   returns: v.array(passwordDoc),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
@@ -137,7 +154,9 @@ export const list = query({
       .unique();
     if (!user) return [];
 
-    return await listVisibleForUser(ctx, user);
+    const entries = await listVisibleForUser(ctx, user);
+    if (!args.kind) return entries;
+    return entries.filter((entry) => (entry.kind ?? "password") === args.kind);
   },
 });
 
@@ -157,6 +176,7 @@ export const create = mutation({
       password: args.password,
       url: args.url?.trim() || undefined,
       notes: args.notes?.trim() || undefined,
+      kind: normalizeKind(args.kind),
       ownerId: user._id,
       familyId: user.familyId,
       isPrivate: args.isPrivate ?? false,
@@ -174,6 +194,7 @@ export const update = mutation({
     password: v.optional(v.string()),
     url: v.optional(v.string()),
     notes: v.optional(v.string()),
+    kind: v.optional(entryKind),
     isPrivate: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -225,13 +246,18 @@ export const getUserByEmailInternal = internalQuery({
 });
 
 export const listForOwnerInternal = internalQuery({
-  args: { ownerId: v.id("users") },
+  args: {
+    ownerId: v.id("users"),
+    kind: v.optional(entryKind),
+  },
   returns: v.array(passwordDoc),
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.ownerId);
     if (!user) return [];
 
-    return await listVisibleForUser(ctx, user);
+    const entries = await listVisibleForUser(ctx, user);
+    if (!args.kind) return entries;
+    return entries.filter((entry) => (entry.kind ?? "password") === args.kind);
   },
 });
 
@@ -272,6 +298,7 @@ export const createForOwnerInternal = internalMutation({
       password: args.password,
       url: args.url?.trim() || undefined,
       notes: args.notes?.trim() || undefined,
+      kind: normalizeKind(args.kind),
       ownerId: args.ownerId,
       familyId: owner.familyId,
       isPrivate: args.isPrivate ?? false,
@@ -289,6 +316,7 @@ export const updateForOwnerInternal = internalMutation({
     password: v.optional(v.string()),
     url: v.optional(v.string()),
     notes: v.optional(v.string()),
+    kind: v.optional(entryKind),
     isPrivate: v.optional(v.boolean()),
   },
   returns: v.null(),
