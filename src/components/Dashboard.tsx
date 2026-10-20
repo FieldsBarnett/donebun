@@ -9,6 +9,7 @@ import { filterTasks, FilterMode } from "../lib/filterUtils";
 import {
   getTodayTasks,
 } from "../lib/todayTasks";
+import LoopsSection from "./LoopsSection";
 
 export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
   const currentUser = useQuery(api.users.getCurrentUser);
@@ -64,6 +65,10 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
       {/* Fuzzy Search */}
       <div className="mb-8">
         <SearchBar />
+      </div>
+
+      <div className="space-y-12 mb-12">
+        <LoopsSection />
       </div>
 
       {/* Star / Today Header styling like Things 3 */}
