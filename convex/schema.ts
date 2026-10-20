@@ -61,13 +61,55 @@ export default defineSchema({
       name: v.string(),      // Original file name
       type: v.string(),      // MIME type
     }))),
+    loopId: v.optional(v.id("loops")),
+    loopOrder: v.optional(v.number()),
   })
     .index("by_family", ["familyId"])
     .index("by_assignee", ["assigneeId"])
     .index("by_category", ["categoryId"])
     .index("by_family_dueDate", ["familyId", "dueDate"])
     .index("by_parent", ["parentTaskId"])
-    .index("by_statusSet", ["statusSet"]),
+    .index("by_statusSet", ["statusSet"])
+    .index("by_loop", ["loopId"]),
+
+  loops: defineTable({
+    ownerId: v.id("users"),
+    title: v.string(),
+    nextStep: v.optional(v.string()),
+    description: v.optional(v.string()),
+    contextLog: v.optional(v.array(v.object({
+      text: v.string(),
+      createdAt: v.number(),
+    }))),
+    status: v.union(
+      v.literal("open"),
+      v.literal("stuck-waiting"),
+      v.literal("closed"),
+    ),
+    orderPosition: v.number(),
+    emoji: v.optional(v.string()),
+    color: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastTouched: v.number(),
+    closedAt: v.optional(v.number()),
+    closingNote: v.optional(v.string()),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_status", ["ownerId", "status"]),
+
+  loopItems: defineTable({
+    loopId: v.id("loops"),
+    ownerId: v.id("users"),
+    kind: v.union(v.literal("note"), v.literal("link")),
+    text: v.optional(v.string()),
+    url: v.optional(v.string()),
+    linkTitle: v.optional(v.string()),
+    orderPosition: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_loop", ["loopId"]),
 
 
   googleAccounts: defineTable({

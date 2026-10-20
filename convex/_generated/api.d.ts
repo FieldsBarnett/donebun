@@ -18,6 +18,8 @@ import type * as google from "../google.js";
 import type * as googleActions from "../googleActions.js";
 import type * as http from "../http.js";
 import type * as import_ from "../import.js";
+import type * as loopConstants from "../loopConstants.js";
+import type * as loops from "../loops.js";
 import type * as passwords from "../passwords.js";
 import type * as recurrence from "../recurrence.js";
 import type * as tasks from "../tasks.js";
@@ -41,6 +43,8 @@ declare const fullApi: ApiFromModules<{
   googleActions: typeof googleActions;
   http: typeof http;
   import: typeof import_;
+  loopConstants: typeof loopConstants;
+  loops: typeof loops;
   passwords: typeof passwords;
   recurrence: typeof recurrence;
   tasks: typeof tasks;

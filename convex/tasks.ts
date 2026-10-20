@@ -13,6 +13,7 @@ import {
   parseVirtualTaskId,
   endFixedSeriesBefore,
 } from "./recurrence";
+import { touchLoop } from "./loopHelpers";
 
 export const getTasks = query({
   args: {
@@ -75,6 +76,20 @@ export const getTasks = query({
       t.status !== "deleted" &&
       (!t.isPrivate || t.ownerId === user?._id || t.assigneeId === user?._id)
     );
+
+    // Hide tasks archived inside closed loops (still visible in loop archive)
+    if (user) {
+      const closedLoops = await ctx.db
+        .query("loops")
+        .withIndex("by_owner_status", (q) =>
+          q.eq("ownerId", user._id).eq("status", "closed"),
+        )
+        .collect();
+      const closedLoopIds = new Set(closedLoops.map((l) => l._id));
+      tasks = tasks.filter(
+        (t) => !t.loopId || !closedLoopIds.has(t.loopId),
+      );
+    }
 
     const expandedTasks: any[] = [];
     const now = new Date();
@@ -173,6 +188,7 @@ export const createTask = mutation({
       name: v.string(),
       type: v.string(),
     }))),
+    loopId: v.optional(v.id("loops")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -186,6 +202,28 @@ export const createTask = mutation({
     const familyId = user?.familyId;
     if (!user || !familyId) throw new Error("User or family not found");
 
+    const attachLoopId = args.loopId;
+    let loopOrder: number | undefined;
+    if (attachLoopId) {
+      const loop = await ctx.db.get(attachLoopId);
+      if (!loop || loop.ownerId !== user._id || loop.status === "closed") {
+        throw new Error("Invalid loop");
+      }
+      const loopTasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_loop", (q) => q.eq("loopId", attachLoopId))
+        .collect();
+      const loopItems = await ctx.db
+        .query("loopItems")
+        .withIndex("by_loop", (q) => q.eq("loopId", attachLoopId))
+        .collect();
+      const orders = [
+        ...loopTasks.map((t) => t.loopOrder ?? 0),
+        ...loopItems.map((i) => i.orderPosition),
+      ];
+      loopOrder = orders.length === 0 ? 0 : Math.max(...orders) + 1;
+    }
+
     // Auto-acknowledge: if the creator is assigning to themselves (or no one),
     // pre-fill lastNotifiedAssigneeId so no popup fires for their own tasks.
     const effectiveAssigneeId = args.assigneeId;
@@ -194,7 +232,7 @@ export const createTask = mutation({
         ? user._id
         : undefined;
 
-    return await ctx.db.insert("tasks", {
+    const taskId = await ctx.db.insert("tasks", {
       title: args.title,
       description: args.description,
       familyId: familyId,
@@ -209,7 +247,14 @@ export const createTask = mutation({
       status: "active",
       statusSet: Date.now(),
       lastNotifiedAssigneeId,
+      loopId: attachLoopId,
+      loopOrder,
     });
+
+    if (attachLoopId) {
+      await touchLoop(ctx, attachLoopId);
+    }
+    return taskId;
   },
 });
 
@@ -253,6 +298,10 @@ export const updateTaskStatus = mutation({
         await spawnNextCompletionTask(ctx as any, task);
       } else if (args.status === "active" && wasCompleted) {
         await removeSpawnedCompletionTask(ctx as any, task);
+      }
+
+      if (task.loopId) {
+        await touchLoop(ctx, task.loopId);
       }
     }
   },
@@ -346,6 +395,9 @@ export const updateTask = mutation({
         }
 
         await ctx.db.patch(task._id, patchData);
+        if (task.loopId) {
+          await touchLoop(ctx, task.loopId);
+        }
         return;
       }
     }

@@ -7,6 +7,7 @@ import Timeline from "./components/Timeline";
 import CalendarView from "./components/CalendarView";
 import Unscheduled from "./components/Unscheduled";
 import Logbook from "./components/Logbook";
+import LoopsArchive from "./components/LoopsArchive";
 import Settings from "./components/Settings";
 import QuickEntry from "./components/QuickEntry";
 import VoiceEntry from "./components/VoiceEntry";
@@ -389,6 +390,7 @@ function AppContent() {
           <Route path="/calendar" element={<CalendarView filterMode={filterMode} />} />
           <Route path="/unscheduled" element={<Unscheduled filterMode={filterMode} />} />
           <Route path="/logbook" element={<Logbook filterMode={filterMode} />} />
+          <Route path="/loops/archive" element={<LoopsArchive />} />
           <Route path="/settings" element={<Settings filterMode={filterMode} />} />
           <Route path="/join/:inviteCode" element={<InviteLanding />} />
           <Route path="/google-oauth-callback" element={<GoogleOAuthCallback />} />
