@@ -395,6 +395,9 @@ export const updateTask = mutation({
         }
 
         await ctx.db.patch(task._id, patchData);
+        if (task.loopId) {
+          await touchLoop(ctx, task.loopId);
+        }
         return;
       }
     }
