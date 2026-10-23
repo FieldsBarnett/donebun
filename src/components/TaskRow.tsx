@@ -422,6 +422,7 @@ export function TaskRow({
               {/* Checkbox */}
               <motion.button
                 layoutId={`checkbox-${id}`}
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); onToggle(); }}
                 className={`flex-shrink-0 flex items-center justify-center rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[var(--color-primary)] relative
                   w-[22px] h-[22px] mt-0.5
@@ -488,6 +489,7 @@ export function TaskRow({
               {/* Checkbox (larger) */}
               <motion.button
                 layoutId={`checkbox-${id}`}
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); onToggle(); }}
                 className={`flex-shrink-0 flex items-center justify-center rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[var(--color-primary)] relative
                   w-[24px] h-[24px] mt-1.5

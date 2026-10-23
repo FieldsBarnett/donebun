@@ -63,6 +63,8 @@ export default defineSchema({
     }))),
     loopId: v.optional(v.id("loops")),
     loopOrder: v.optional(v.number()),
+    /** Manual order within a dashboard bucket + category group. */
+    dashboardOrder: v.optional(v.number()),
   })
     .index("by_family", ["familyId"])
     .index("by_assignee", ["assigneeId"])

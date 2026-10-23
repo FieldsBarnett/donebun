@@ -86,6 +86,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
           <TaskGroupedList 
             tasks={todayTasks} 
             isToday 
+            dashboardBucket="today"
             onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
             expandedTaskId={taskId}
             onToggleExpand={(newId) => {
@@ -104,6 +105,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
             </div>
             <TaskGroupedList 
               tasks={overdueTasks} 
+              dashboardBucket="overdue"
               onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
               expandedTaskId={taskId}
               onToggleExpand={(newId) => {
@@ -124,6 +126,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
             </div>
             <TaskGroupedList 
               tasks={unscheduledTasks} 
+              dashboardBucket="unscheduled"
               onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
               expandedTaskId={taskId}
               onToggleExpand={(newId) => {
@@ -143,6 +146,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
             </div>
             <TaskGroupedList 
               tasks={upcomingTasks} 
+              dashboardBucket="upcoming"
               onToggle={(task) => updateTaskStatus({ id: task._id, status: task.status === "completed" ? "active" : "completed" })}
               expandedTaskId={taskId}
               onToggleExpand={(newId) => {

@@ -604,6 +604,64 @@ export const repairRecurrenceSeriesData = mutation({
   },
 });
 
+export const reorderDashboardTasks = mutation({
+  args: {
+    bucket: v.union(
+      v.literal("today"),
+      v.literal("overdue"),
+      v.literal("unscheduled"),
+      v.literal("upcoming"),
+    ),
+    placements: v.array(
+      v.object({
+        id: v.string(),
+        categoryId: v.union(v.id("categories"), v.null()),
+        order: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.subject),
+      )
+      .unique();
+    if (!user?.familyId) throw new Error("User or family not found");
+
+    for (const placement of args.placements) {
+      const { taskId, isVirtual } = parseVirtualTaskId(placement.id);
+      const task = await ctx.db.get(taskId as Id<"tasks">);
+      if (!task || task.familyId !== user.familyId) continue;
+
+      const rootId = (task.parentTaskId || task._id) as Id<"tasks">;
+
+      const categoryTargetId: Id<"tasks"> = isVirtual
+        ? rootId
+        : task._id;
+      const orderTargetId: Id<"tasks"> = task.parentTaskId
+        ? task._id
+        : rootId;
+
+      const categoryValue =
+        placement.categoryId === null ? undefined : placement.categoryId;
+
+      if (categoryTargetId === orderTargetId) {
+        await ctx.db.patch(categoryTargetId, {
+          categoryId: categoryValue,
+          dashboardOrder: placement.order,
+        });
+      } else {
+        await ctx.db.patch(categoryTargetId, { categoryId: categoryValue });
+        await ctx.db.patch(orderTargetId, { dashboardOrder: placement.order });
+      }
+    }
+  },
+});
+
 export const acknowledgeAssignments = mutation({
   args: { taskIds: v.array(v.id("tasks")) },
   handler: async (ctx, args) => {
