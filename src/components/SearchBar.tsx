@@ -5,30 +5,50 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { parseDueDate, toDateKey } from "../lib/dateUtils";
 import { fuzzyScore } from "../lib/fuzzySearch";
+import { seriesRootId } from "../../shared/taskIds";
 
 export default function SearchBar() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const tasks = useQuery(api.tasks.getTasks, {}) ?? [];
+  const tasks = useQuery(api.tasks.getTasks, { expandRecurrence: false }) ?? [];
   const updateStatus = useMutation(api.tasks.updateTaskStatus);
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const results = query.trim()
-    ? tasks
-        .map((t) => ({ task: t, score: fuzzyScore(query, t.title) }))
-        .filter((r) => r.score > 0)
-        .sort((a, b) => {
-          const aCompleted = a.task.status === "completed";
-          const bCompleted = b.task.status === "completed";
-          if (aCompleted !== bCompleted) {
-            return aCompleted ? 1 : -1;
+    ? (() => {
+        const scored = tasks
+          .map((t) => ({ task: t, score: fuzzyScore(query, t.title) }))
+          .filter((r) => r.score > 0);
+
+        const bestBySeries = new Map<string, (typeof scored)[number]>();
+        for (const entry of scored) {
+          const key = seriesRootId(entry.task);
+          const existing = bestBySeries.get(key);
+          if (!existing) {
+            bestBySeries.set(key, entry);
+            continue;
           }
-          return b.score - a.score;
-        })
-        .slice(0, 8)
-        .map((r) => r.task)
+          const preferNew =
+            (!entry.task.parentTaskId && existing.task.parentTaskId) ||
+            (entry.task.status !== "completed" && existing.task.status === "completed") ||
+            entry.score > existing.score;
+          if (preferNew) bestBySeries.set(key, entry);
+        }
+
+        return [...bestBySeries.values()]
+          .sort((a, b) => {
+            const aCompleted = a.task.status === "completed";
+            const bCompleted = b.task.status === "completed";
+            if (aCompleted !== bCompleted) {
+              return aCompleted ? 1 : -1;
+            }
+            return b.score - a.score;
+          })
+          .slice(0, 8)
+          .map((r) => r.task);
+      })()
     : [];
 
   // Close on outside click
@@ -57,11 +77,12 @@ export default function SearchBar() {
   const handleResultClick = (task: any) => {
     setOpen(false);
     setQuery("");
+    const openId = task.parentTaskId ?? task._id;
     if (task.dueDate) {
       const dateKey = toDateKey(parseDueDate(task.dueDate));
-      navigate(`/timeline?date=${dateKey}&taskId=${task._id}`);
+      navigate(`/timeline?date=${dateKey}&taskId=${openId}`);
     } else {
-      navigate(`/unscheduled?taskId=${task._id}`);
+      navigate(`/unscheduled?taskId=${openId}`);
     }
   };
 

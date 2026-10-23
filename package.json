@@ -11,6 +11,8 @@
     "build:cloudflare": "bash scripts/cloudflare-build.sh",
     "postinstall": "node scripts/patch-convex-bin.mjs",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "tauri": "tauri",
     "tauri:ios": "tauri ios dev",
     "tauri:ios:live": "tauri ios dev --host"
@@ -49,6 +51,7 @@
     "postcss": "^8.5.14",
     "tailwindcss": "^4.2.4",
     "typescript": "~5.8.3",
+    "vitest": "^3.2.4",
     "vite": "^7.0.4",
     "vite-plugin-pwa": "^1.3.0"
   }
