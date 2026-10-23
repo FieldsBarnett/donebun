@@ -7,6 +7,11 @@ import {
 } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import {
+  findExistingDuplicate,
+  passwordDuplicateKey,
+  type PasswordCsvRow,
+} from "../shared/passwordCsv";
 
 const entryKind = v.union(v.literal("password"), v.literal("api_key"));
 
@@ -207,6 +212,131 @@ export const update = mutation({
     const { id, ...fields } = args;
     await ctx.db.patch(id, buildPatch(fields));
     return null;
+  },
+});
+
+const importRowValidator = v.object({
+  name: v.string(),
+  username: v.optional(v.string()),
+  password: v.string(),
+  url: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
+
+const importResultValidator = v.object({
+  imported: v.number(),
+  updated: v.number(),
+  skipped: v.number(),
+});
+
+/** Batch-import password rows from CSV (create or update owned duplicates). */
+export const importFromCsv = mutation({
+  args: {
+    rows: v.array(importRowValidator),
+  },
+  returns: importResultValidator,
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const visible = await listVisibleForUser(ctx, user);
+
+    let imported = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const seenKeys = new Set<string>();
+
+    for (const row of args.rows) {
+      const password = row.password.trim();
+      if (!password) {
+        skipped++;
+        continue;
+      }
+
+      const name = row.name.trim();
+      if (!name) {
+        skipped++;
+        continue;
+      }
+
+      const normalized: PasswordCsvRow = {
+        name,
+        username: row.username?.trim() || undefined,
+        password,
+        url: row.url?.trim() || undefined,
+        notes: row.notes?.trim() || undefined,
+      };
+
+      const duplicate = findExistingDuplicate(
+        visible.map((entry) => ({
+          _id: entry._id,
+          ownerId: entry.ownerId,
+          url: entry.url,
+          username: entry.username,
+          name: entry.name,
+        })),
+        normalized,
+        user._id,
+      );
+
+      if (duplicate) {
+        if (duplicate.ownerId !== user._id) {
+          skipped++;
+          continue;
+        }
+        await ctx.db.patch(duplicate._id as Id<"passwords">, {
+          name: normalized.name,
+          username: normalized.username,
+          password: normalized.password,
+          url: normalized.url,
+          notes: normalized.notes,
+          updatedAt: Date.now(),
+        });
+        updated++;
+        continue;
+      }
+
+      const dedupeKey = passwordDuplicateKey(
+        normalized.url,
+        normalized.username,
+        normalized.name,
+      );
+      if (seenKeys.has(dedupeKey)) {
+        skipped++;
+        continue;
+      }
+      seenKeys.add(dedupeKey);
+
+      const id = await ctx.db.insert("passwords", {
+        name: normalized.name,
+        username: normalized.username,
+        password: normalized.password,
+        url: normalized.url,
+        notes: normalized.notes,
+        kind: "password",
+        ownerId: user._id,
+        familyId: user.familyId,
+        isPrivate: false,
+        updatedAt: Date.now(),
+      });
+      imported++;
+
+      visible.push({
+        _id: id,
+        _creationTime: Date.now(),
+        name: normalized.name,
+        username: normalized.username,
+        password: normalized.password,
+        url: normalized.url,
+        notes: normalized.notes,
+        kind: "password",
+        ownerId: user._id,
+        familyId: user.familyId,
+        isPrivate: false,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { imported, updated, skipped };
   },
 });
 
