@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -12,10 +12,17 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
+  Download,
   User,
   Users,
   X,
 } from "lucide-react";
+import {
+  entriesForChromeExport,
+  parsePasswordCsv,
+  serializePasswordCsv,
+} from "../../shared/passwordCsv";
 import Modal from "./Modal";
 import { filterPasswords, FilterMode } from "../lib/filterUtils";
 import { fuzzyScoreFields } from "../lib/fuzzySearch";
@@ -59,6 +66,9 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
   const createPassword = useMutation(api.passwords.create);
   const updatePassword = useMutation(api.passwords.update);
   const removePassword = useMutation(api.passwords.remove);
+  const importFromCsv = useMutation(api.passwords.importFromCsv);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<Id<"passwords"> | null>(null);
@@ -203,6 +213,69 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
     }
   };
 
+  const exportablePasswords = useMemo(() => {
+    if (!passwords) return [];
+    const modeFiltered = filterPasswords(passwords, currentUser, filterMode).filter(
+      (entry) => kindFilter === "all" || entryKind(entry.kind) === kindFilter,
+    );
+    return entriesForChromeExport(
+      modeFiltered.map((entry) => ({
+        name: entry.name,
+        url: entry.url,
+        username: entry.username,
+        password: entry.password,
+        notes: entry.notes,
+        kind: entry.kind,
+      })),
+    );
+  }, [passwords, currentUser, filterMode, kindFilter]);
+
+  const handleExportCsv = () => {
+    if (exportablePasswords.length === 0) {
+      alert("No passwords to export for the current filters.");
+      return;
+    }
+    const message =
+      `Export ${exportablePasswords.length} password${exportablePasswords.length === 1 ? "" : "s"} as CSV?\n\n` +
+      "The file will contain plaintext passwords. Store it securely and delete it when you no longer need it.\n\n" +
+      "API keys are not included.";
+    if (!confirm(message)) return;
+
+    const csv = serializePasswordCsv(exportablePasswords);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `donebun-passwords-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = async (file: File) => {
+    setImporting(true);
+    setError(null);
+    try {
+      const text = await file.text();
+      const rows = parsePasswordCsv(text);
+      if (rows.length === 0) {
+        alert("No importable rows found. Check that the file is a CSV with username/password columns.");
+        return;
+      }
+      const result = await importFromCsv({ rows });
+      alert(
+        `Import complete.\n\n` +
+          `Added: ${result.imported}\n` +
+          `Updated: ${result.updated}\n` +
+          `Skipped: ${result.skipped}`,
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  };
+
   const filterLabel =
     filterMode === "personal"
       ? "Personal"
@@ -250,7 +323,7 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {(
             [
               ["all", "All"],
@@ -271,6 +344,37 @@ export default function PasswordManager({ onBack, filterMode }: PasswordManagerP
               {label}
             </button>
           ))}
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={!passwords || exportablePasswords.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-[var(--color-surface-soft)] text-[var(--color-muted)] disabled:opacity-40 hover:text-[var(--color-ink)] transition-colors"
+            title="Download CSV (Chrome format)"
+          >
+            <Download size={15} />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-[var(--color-surface-soft)] text-[var(--color-muted)] disabled:opacity-40 hover:text-[var(--color-ink)] transition-colors"
+            title="Import CSV from Chrome or other managers"
+          >
+            <Upload size={15} />
+            {importing ? "Importing…" : "Import CSV"}
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleImportFile(file);
+            }}
+          />
         </div>
 
         <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
