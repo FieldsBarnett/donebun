@@ -4,6 +4,7 @@ import { api } from "../../convex/_generated/api";
 import { TaskGroupedList } from "./TaskGroupedList";
 import { Inbox, Repeat } from "lucide-react";
 import { isSameDay } from "../lib/dateUtils";
+import { parseVirtualTaskId } from "../../shared/taskIds";
 import { filterTasks, FilterMode } from "../lib/filterUtils";
 
 export default function Unscheduled({ filterMode }: { filterMode: FilterMode }) {
@@ -35,11 +36,8 @@ export default function Unscheduled({ filterMode }: { filterMode: FilterMode }) 
   const recurringTasks = allFilteredTasks.filter((t) => isVisible(t) && t.isRecurring);
 
   const getSeriesId = (t: any) => {
-    const id = t._id;
-    if (typeof id === "string" && id.includes(":")) {
-      return id.split(":")[0];
-    }
-    return t.parentTaskId || id;
+    if (t.parentTaskId) return t.parentTaskId;
+    return parseVirtualTaskId(String(t._id)).taskId;
   };
 
   const nextInSeries = new Map();

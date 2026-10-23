@@ -1,6 +1,10 @@
 "use node";
 import { action } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  normalizeVoiceRecurrence,
+  sanitizeVoiceRecurrence,
+} from "../shared/voiceTaskNormalize";
 
 // ─── Voice Task Extraction: Groq Whisper → Groq/OpenAI LLM ───────────────────
 
@@ -167,7 +171,8 @@ Rules:
 - "date" should be a YYYY-MM-DD string if a date was mentioned. Otherwise null.
 - "time" should be an HH:MM string in 24-hour format if a specific time was mentioned. Otherwise null.
 - "categoryId" must be one of the valid category IDs above if mentioned, otherwise null.
-- "recurrence" should be an object if the task is mentioned as recurring (e.g., "every day", "weekly", "every Tuesday"). Otherwise null.
+- "recurrence" must be null unless the speaker clearly asks for a repeating schedule (e.g., "every day", "weekly", "every Tuesday", "repeat"). A one-off deadline or due date ("due today", "deadline Friday", "by tomorrow") is NOT recurrence — use "date"/"time" only and leave recurrence null.
+  - Never infer weekly/daily recurrence from words like "deadline", "due", or "by".
   - "strategy": "fixed" for tasks scheduled on specific dates (e.g., "every Monday") or "completion" for tasks that should recur after they are finished (e.g., "every 3 days after I finish it"). Default to "fixed" if not specified.
   - "frequency": "daily", "weekly", "monthly", or "yearly".
   - "interval": The number of frequency units between occurrences (e.g., "every 2 weeks" has frequency "weekly" and interval 2). Default is 1.
@@ -208,19 +213,23 @@ Schema:
         ? parsed.tasks 
         : [parsed];
 
-    return taskArray.map((task) => ({
-      title: task?.title || "Untitled Task",
-      details: task?.details ?? null,
-      assigneeId: resolveAssigneeId(task?.assigneeId, args.familyId, args.familyMembers),
-      date: task?.date ?? null,
-      time: task?.time ?? null,
-      categoryId: task?.categoryId ?? null,
-      recurrence: task?.recurrence ? {
-        strategy: task.recurrence.strategy === "completion" ? "completion" : "fixed",
-        frequency: task.recurrence.frequency || "daily",
-        interval: typeof task.recurrence.interval === "number" ? task.recurrence.interval : 1,
-      } : null,
-    }));
+    return taskArray.map((task) => {
+      const normalized = normalizeVoiceRecurrence(task?.recurrence);
+      const recurrence = sanitizeVoiceRecurrence(
+        normalized,
+        transcript,
+        task?.title || "",
+      );
+      return {
+        title: task?.title || "Untitled Task",
+        details: task?.details ?? null,
+        assigneeId: resolveAssigneeId(task?.assigneeId, args.familyId, args.familyMembers),
+        date: task?.date ?? null,
+        time: task?.time ?? null,
+        categoryId: task?.categoryId ?? null,
+        recurrence,
+      };
+    });
   },
 });
 

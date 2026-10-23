@@ -24,7 +24,7 @@ export default function Dashboard({ filterMode }: { filterMode: FilterMode }) {
     e.setHours(23, 59, 59, 999);
     return { 
       start: toLocalISOString(s, false), 
-      end: e.toISOString() 
+      end: toLocalISOString(e, true),
     };
   }, []);
 

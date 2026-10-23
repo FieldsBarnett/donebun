@@ -14,11 +14,13 @@ import {
   endFixedSeriesBefore,
 } from "./recurrence";
 import { touchLoop } from "./loopHelpers";
+import { demoteRecurringSeriesToSingleTask, repairRecurrenceDataForFamily } from "./recurrenceSeries";
 
 export const getTasks = query({
   args: {
     start: v.optional(v.string()), // ISO string
     end: v.optional(v.string()),   // ISO string
+    expandRecurrence: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -93,6 +95,7 @@ export const getTasks = query({
 
     const expandedTasks: any[] = [];
     const now = new Date();
+    const shouldExpandRecurrence = args.expandRecurrence !== false;
     
     // Determine the limit for virtual expansion
     let limitDate = new Date();
@@ -119,6 +122,7 @@ export const getTasks = query({
 
       // Dynamically expand FIXED recurrence tasks
       if (
+        shouldExpandRecurrence &&
         task.recurrence?.strategy === "fixed" && 
         !task.parentTaskId && // This is the source task
         task.dueDate
@@ -361,6 +365,17 @@ export const updateTask = mutation({
     const rootTask = await ctx.db.get(rootId);
     if (!rootTask) throw new Error("Root task not found");
 
+    const isRemovingRecurrence = updates.recurrence === null;
+
+    // Turning off repeat applies to the whole series (not "this occurrence only").
+    if (isRemovingRecurrence && rootTask.recurrence) {
+      await demoteRecurringSeriesToSingleTask(ctx as any, rootTask, updates);
+      if (task.loopId) {
+        await touchLoop(ctx, task.loopId);
+      }
+      return;
+    }
+
     // Mode: SINGLE - Materialize exception or update existing exception
     if (updateMode === "single") {
       if (isVirtual && virtualDate) {
@@ -567,6 +582,28 @@ export const getUnseenAssignments = query({
  * Marks a list of tasks as "seen" for the current user by setting
  * lastNotifiedAssigneeId to the current user's ID.
  */
+/**
+ * Idempotent repair for families affected by recurrence-removal bugs.
+ * Run once from the Convex dashboard (Functions → repairRecurrenceSeriesData).
+ */
+export const repairRecurrenceSeriesData = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    const familyId = user?.familyId;
+    if (!familyId) throw new Error("User or family not found");
+
+    return await repairRecurrenceDataForFamily(ctx, familyId);
+  },
+});
+
 export const acknowledgeAssignments = mutation({
   args: { taskIds: v.array(v.id("tasks")) },
   handler: async (ctx, args) => {

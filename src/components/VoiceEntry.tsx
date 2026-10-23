@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import Modal from "./Modal";
 import { TaskRow } from "./TaskRow";
-import { parseDueDate, toDateKey } from "../lib/dateUtils";
+import { parseDueDate, toDateKey, toLocalISOString } from "../lib/dateUtils";
 
 import { RecurrenceRule } from "./RecurrencePickerModal";
 
@@ -387,7 +387,7 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
         currentUserId: currentUser?._id ?? "",
         currentUserName: currentUser?.name ?? "Me",
         categories: cats,
-        today: new Date().toISOString().slice(0, 10),
+        today: toLocalISOString(new Date(), false),
       });
 
       setParsedTasks(result.map((t) => {
@@ -474,7 +474,7 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
         currentUserId: currentUser?._id ?? "",
         currentUserName: currentUser?.name ?? "Me",
         categories: cats,
-        today: new Date().toISOString().slice(0, 10),
+        today: toLocalISOString(new Date(), false),
       });
       onDone(result.map((t) => {
         let dueDate: string | null = null;
@@ -525,7 +525,7 @@ const VoiceEntry = forwardRef<VoiceEntryHandle, VoiceEntryProps>(function VoiceE
         currentUserId: currentUser?._id ?? "",
         currentUserName: currentUser?.name ?? "Me",
         categories: cats,
-        today: new Date().toISOString().slice(0, 10),
+        today: toLocalISOString(new Date(), false),
       });
       onDone(result.map((t) => {
         let dueDate: string | null = null;

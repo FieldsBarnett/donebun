@@ -231,6 +231,11 @@ export function TaskRow({
     }
 
     if (isRecurring) {
+      // Removing repeat converts the whole series to one task — not per-occurrence.
+      if (localRecurrence === null && initialRecurrence) {
+        performSave(updates, "all");
+        return;
+      }
       pendingUpdatesRef.current = updates;
       setShowRecurrenceModal(true);
       return;

@@ -1,33 +1,17 @@
 import { MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
+import {
+  parseVirtualTaskId as parseVirtualTaskIdShared,
+  formatVirtualTaskId as formatVirtualTaskIdShared,
+} from "../shared/taskIds";
 
-/**
- * Virtual recurring task IDs encode a root task id and occurrence date as
- * `${taskId}:${isoDueDate}`. ISO datetimes contain colons, so never split on
- * every colon — only the first separator.
- */
-export function parseVirtualTaskId(id: string): {
-  taskId: string;
-  virtualDate: string | null;
-  isVirtual: boolean;
-} {
-  const colonIndex = id.indexOf(":");
-  if (colonIndex === -1) {
-    return { taskId: id, virtualDate: null, isVirtual: false };
-  }
-
-  return {
-    taskId: id.slice(0, colonIndex),
-    virtualDate: id.slice(colonIndex + 1),
-    isVirtual: true,
-  };
-}
+export const parseVirtualTaskId = parseVirtualTaskIdShared;
 
 export function formatVirtualTaskId(
   taskId: Id<"tasks"> | string,
   virtualDate: string,
 ): string {
-  return `${taskId}:${virtualDate}`;
+  return formatVirtualTaskIdShared(String(taskId), virtualDate);
 }
 
 export function toLocalISOString(date: Date, includeTime: boolean): string {
@@ -152,7 +136,12 @@ export async function materializeVirtualTask(
     lastNotifiedAssigneeId: task.lastNotifiedAssigneeId,
     dueDate: updates.dueDate === null ? undefined : (updates.dueDate !== undefined ? updates.dueDate : virtualDate),
     originalDueDate: virtualDate,
-    recurrence: task.recurrence,
+    recurrence:
+      updates.recurrence !== undefined
+        ? updates.recurrence === null
+          ? undefined
+          : updates.recurrence
+        : task.recurrence,
     familyId: task.familyId,
     isPrivate: updates.isPrivate !== undefined ? updates.isPrivate : task.isPrivate,
     checklist: updates.checklist !== undefined ? updates.checklist : task.checklist,
